@@ -19,9 +19,16 @@ from kiro_crew.embeddings import PRIORITY_NORMAL
 from kiro_crew.security import is_sensitive_path
 from kiro_crew.sel import sel
 
+from . import folder_watcher_reextract as _fw_reextract
 from .chunker import CHUNK_TOKEN_SIZE, MAX_CHUNKS_PER_FILE
 from .dedup import dedup_document
-from .ingestion import FileTooLargeError, run_to_completion
+from .folder_watcher_reextract import _budget_spent, _extraction_incomplete, _extraction_retry_due
+from .ingestion import (
+    EXTRACTION_INCOMPLETE_PREFIX,
+    FileTooLargeError,
+    extraction_incomplete_message,
+    run_to_completion,
+)
 from .kiroignore import KIROIGNORE_FILENAME
 from .kiroignore import load as load_kiroignore
 from .readers import FileReader
@@ -53,6 +60,7 @@ DEFAULT_MAX_FILES = 5000
 # turns that unbounded loop into a bounded one and leaves a 'failed' row the user can
 # see and act on.
 MAX_SCAN_ATTEMPTS = 3
+
 
 # How many discovered files a scan processes between ``scan_paused`` re-reads.
 # Running the check per file would be one on-loop sqlite SELECT against ``sources``
@@ -632,6 +640,13 @@ class FolderWatcher:
                     and mtime <= state.get("mtime", 0)):
                 # Unchanged — just update last_seen
                 last_seen_batch.append((now, source_id, file_path))
+                if _extraction_retry_due(state, MAX_SCAN_ATTEMPTS) and not (
+                        chunk_budget and chunks_ingested >= chunk_budget):
+                    chunks_ingested += await self._reextract_failed_chunks(
+                        source_id, file_path, state, state.get("content_hash", ""),
+                        state.get("mtime", 0), now, embed_priority)
+                    if _budget_spent(chunk_budget, chunks_ingested, stats):
+                        break
                 continue
 
             # mtime changed or new/interrupted file — check content hash
@@ -657,6 +672,9 @@ class FolderWatcher:
             # it, and it costs one read on the single sweep that retires the row
             # (later sweeps take the 'failed' gate above and read nothing).
             prior_attempts = int(state.get("attempts") or 0) if state else 0
+            if state and _extraction_incomplete(state) and content_hash != state.get("content_hash"):
+                # Edited since the incomplete ingest: new content, full budget.
+                prior_attempts = 0
             if state and state.get("status") == "scanning":
                 if content_hash != state.get("content_hash"):
                     prior_attempts = 0
@@ -677,8 +695,21 @@ class FolderWatcher:
 
             if (state and not forced and state.get("status") == "done"
                     and content_hash == state.get("content_hash")):
-                # Touched but content unchanged
-                await self._persist_state(source_id, file_path, content_hash, mtime, state.get("item_ids", "[]"), now, "done", commit=False)
+                # Touched but content unchanged. A pending or spent re-extraction
+                # stays recorded: clearing it here would report the file fully
+                # extracted.
+                kept_incomplete: tuple[str | None, int] = (
+                    (state.get("error_message"), int(state.get("attempts") or 0))
+                    if _extraction_incomplete(state) else (None, 0))
+                await run_to_completion(functools.partial(
+                    self._settle_unchanged_done, source_id, file_path, state,
+                    content_hash, mtime, now, *kept_incomplete))
+                if _extraction_retry_due(state, MAX_SCAN_ATTEMPTS) and not (
+                        chunk_budget and chunks_ingested >= chunk_budget):
+                    chunks_ingested += await self._reextract_failed_chunks(
+                        source_id, file_path, state, content_hash, mtime, now, embed_priority)
+                    if _budget_spent(chunk_budget, chunks_ingested, stats):
+                        break
                 continue
 
             # A row that owned nothing holds a claim for its PREVIOUS content. The
@@ -751,10 +782,13 @@ class FolderWatcher:
                 stats["skipped"] += 1
             else:
                 # Only lands when the commit callback's own write did not: see
-                # _settle_done. Drained like _persist_state.
+                # _settle_done. Drained like _persist_state. An extraction-
+                # incomplete group keeps its reason and the attempt the marker
+                # counted, so a later sweep re-extracts it while the budget lasts.
                 await run_to_completion(functools.partial(
                     self._settle_done, source_id, file_path, content_hash, mtime,
-                    list(item_ids), now, included))
+                    list(item_ids), now, included,
+                    incomplete=outcome == "incomplete"))
                 ingested_paths.append(file_path)
                 if chunk_budget:
                     chunks_ingested += len(item_ids)
@@ -975,6 +1009,11 @@ class FolderWatcher:
         if commit:
             self.store.db.commit()
 
+    # In-place re-extraction of an unchanged file's failed chunks:
+    # kiro_crew.knowledge.folder_watcher_reextract.
+    _reextract_failed_chunks = _fw_reextract.reextract_failed_chunks
+    _settle_unchanged_done = _fw_reextract.settle_unchanged_done
+
     async def _persist_state(self, *args, **kwargs) -> None:
         """:meth:`_update_state`, off the event loop and drained under cancellation.
 
@@ -1054,11 +1093,13 @@ class FolderWatcher:
             "done" if adopted else "deduped", known_text_hash=text_hash)
 
     def _mark_committed(self, source_id: str, file_path: str, item_ids: list[str],
-                        included: set[str] | None) -> None:
+                        included: set[str] | None, incomplete: str | None = None) -> None:
         """Turn the 'scanning' marker into the 'done' row naming *item_ids*.
 
         A targeted UPDATE: the marker already carries the file's content hash and
         mtime. No transaction control, so the caller decides how it commits.
+        *incomplete*, the extraction-incomplete message, is recorded as the row's
+        reason and keeps the marker's attempt count; without it the count clears.
         """
         text_hash: str | None = None
         if item_ids:
@@ -1074,14 +1115,15 @@ class FolderWatcher:
             self._write_include_record(source_id, file_path, included)
         self.store.db.execute(
             "UPDATE folder_file_state SET item_ids = ?, text_hash = ?, "
-            "status = 'done', error_message = NULL, attempts = 0, "
+            "status = 'done', error_message = ?, "
+            "attempts = CASE WHEN ? IS NULL THEN 0 ELSE attempts END, "
             "last_seen = ? WHERE source_id = ? AND file_path = ?",
-            (json.dumps(item_ids), text_hash,
+            (json.dumps(item_ids), text_hash, incomplete, incomplete,
              datetime.now().isoformat(), source_id, file_path))
 
     def _settle_done(self, source_id: str, file_path: str, content_hash: str,
                      mtime: float, item_ids: list[str], now: str,
-                     included: set[str] | None) -> bool:
+                     included: set[str] | None, *, incomplete: bool = False) -> bool:
         """The caller's terminal 'done' write, only over this attempt's own marker.
 
         The commit callback normally wrote the row already. From that moment the
@@ -1095,19 +1137,26 @@ class FolderWatcher:
         Runs inside the scan, under the per-source ``self._locks[source_id]``,
         so no other scan of this source can rewrite the marker meanwhile.
         ``BEGIN IMMEDIATE`` holds the writer lock across the read and the write.
+        When *incomplete*, the row keeps the reason already recorded and the
+        attempt the marker counted, as ``_mark_committed`` does.
         Returns ``True`` when written.
         """
         self.store.db.execute("BEGIN IMMEDIATE")
         try:
             row = self.store.db.execute(
-                "SELECT status FROM folder_file_state "
+                "SELECT status, error_message, attempts FROM folder_file_state "
                 "WHERE source_id = ? AND file_path = ?",
                 (source_id, file_path)).fetchone()
             pending = row is not None and row["status"] == "scanning"
             if pending:
+                reason, attempts = None, 0
+                if incomplete:
+                    reason = (row["error_message"]
+                              or f"{EXTRACTION_INCOMPLETE_PREFIX}some chunks")
+                    attempts = int(row["attempts"] or 0)
                 self._update_state(source_id, file_path, content_hash, mtime,
-                                   json.dumps(item_ids), now, "done",
-                                   commit=False, included=included)
+                                   json.dumps(item_ids), now, "done", reason,
+                                   attempts=attempts, commit=False, included=included)
             self.store.db.execute("COMMIT")
         except BaseException:
             self.store.db.execute("ROLLBACK")
@@ -1325,9 +1374,10 @@ class FolderWatcher:
         the committed group.
 
         Returns ``(item_ids, outcome)`` where *outcome* is ``"done"``,
+        ``"incomplete"`` (committed, but some chunks' extraction call failed),
         ``"failed"`` (``item_ids`` is ``None``), or ``"deduped"`` -- the
         pre-ingest gate refused the write because this exact content is already
-        in the Library. The caller needs the three cases distinguished because
+        in the Library. The caller needs the cases distinguished because
         they persist different ``folder_file_state`` statuses, and an empty
         ``item_ids`` alone cannot tell "refused" from "ingested nothing".
         """
@@ -1399,6 +1449,13 @@ class FolderWatcher:
         # a partial rollback per call, rather than reading a `sources.sync_status`
         # column a concurrent ingest on the same source can flip.
         committed: list[str] | None = None
+        # Set by the pipeline inside the finalize hop, just before
+        # `_record_committed`, when some chunks were stored without an extraction.
+        unextracted: tuple[int, int] | None = None
+
+        def _record_unextracted(failed: int, total: int) -> None:
+            nonlocal unextracted
+            unextracted = (failed, total)
 
         def _record_committed(item_ids: list[str]) -> None:
             # Runs INSIDE the pipeline's finalize hop, on its worker thread --
@@ -1420,8 +1477,12 @@ class FolderWatcher:
             # over it (see `_settle_done`): the row is then visible to the dedup
             # sweep, and its verdict must stand. `store.db` is per-thread and,
             # on this worker, autocommit -- no separate commit hop.
+            # An extraction-incomplete group records why and KEEPS the attempt
+            # count the 'scanning' marker carried, which is the re-extraction
+            # budget `_extraction_retry_due` reads.
             nonlocal committed
             committed = list(item_ids)
+            incomplete = extraction_incomplete_message(*unextracted) if unextracted else None
             # Fail-safe, never fail-closed: the write below is a durability
             # UPGRADE over the in-memory capture, not a precondition. Before it
             # existed this callback could not raise; letting a raise escape now
@@ -1439,7 +1500,7 @@ class FolderWatcher:
             # IMMEDIATE``, which waits for the writer lock instead of failing
             # on it.
             try:
-                self._mark_committed(source_id, file_path, committed, included)
+                self._mark_committed(source_id, file_path, committed, included, incomplete)
                 self.store.db.commit()
                 return
             except Exception:
@@ -1450,7 +1511,8 @@ class FolderWatcher:
             try:
                 self.store.db.execute("BEGIN IMMEDIATE")
                 try:
-                    self._mark_committed(source_id, file_path, committed, included)
+                    self._mark_committed(source_id, file_path, committed, included,
+                                         incomplete)
                     self.store.db.execute("COMMIT")
                 except BaseException:
                     self.store.db.execute("ROLLBACK")
@@ -1491,7 +1553,8 @@ class FolderWatcher:
                 on_duplicate=_record_refused,
                 embed_priority=embed_priority,
                 count_toward_import_budget=False,
-                include_paths=include_paths, included=included)
+                include_paths=include_paths, included=included,
+                on_extraction_failed=_record_unextracted)
 
             if refused:
                 return [], "deduped"
@@ -1504,7 +1567,7 @@ class FolderWatcher:
                 await self._persist_state(source_id, file_path, "", 0, json.dumps(old_item_ids), now, "failed", "partial ingestion failure")
                 return None, "failed"
 
-            return committed, "done"
+            return committed, "incomplete" if unextracted else "done"
         except Exception as e:
             # The pipeline already logged an oversized file as a WARNING. The row
             # reads 'failed', not 'skipped', so the Knowledge page shows why, with Retry.
