@@ -51,13 +51,13 @@ class _Pool:
         self.raise_on = raise_on
         self.batch_prompts: list[str] = []
 
-    async def send_batch(self, prompts, timeout=60.0):
+    async def send_batch(self, prompts, timeout=60.0, response_format=None):
         if self.raise_on == "batch":
             raise RuntimeError(f"pipe broken while sending {SECRET_TEXT}")
         self.batch_prompts.extend(prompts)
         return [self.reply for _ in prompts]
 
-    async def send(self, prompt, timeout=60.0):
+    async def send(self, prompt, timeout=60.0, response_format=None):
         if self.raise_on == "send":
             raise RuntimeError(f"pipe broken while sending {SECRET_TEXT}")
         return self.summary_reply
@@ -109,7 +109,7 @@ class TestExtractionFailuresAreLogged:
         replies = iter(["", f"I could not do that for {SECRET_TEXT}", GOOD_REPLY])
 
         class _Mixed(_Pool):
-            async def send_batch(self, prompts, timeout=60.0):
+            async def send_batch(self, prompts, timeout=60.0, response_format=None):
                 return [next(replies) for _ in prompts]
 
         extractor = EntityExtractor(pool=_Mixed())

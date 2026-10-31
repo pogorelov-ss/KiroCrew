@@ -46,14 +46,16 @@ class _Pool:
         self.refuse = True
         self.error: Exception | None = None
 
-    async def send(self, prompt: str, timeout: float = 0) -> str:
+    async def send(self, prompt: str, timeout: float = 0, *, response_format=None) -> str:
         if self.error is not None:
             raise self.error
         if self.refuse:
             _kiro_fallback("kas cannot run the knowledge pool's client")
         return _REPLY
 
-    async def send_batch(self, prompts: list[str], timeout: float = 0) -> list[str]:
+    async def send_batch(
+        self, prompts: list[str], timeout: float = 0, *, response_format=None
+    ) -> list[str]:
         return [await self.send(p, timeout=timeout) for p in prompts]
 
 
@@ -93,22 +95,22 @@ def _props(kstore, source_id):
 
 class TestThePoolAndExtractorPassTheRefusalOn:
     def test_send_batch_raises_the_refusal(self, lts):
-        pool = LLMPool.__new__(LLMPool)
+        pool = LLMPool(pool_size=1)
 
-        async def _send(prompt, timeout=0):
+        async def _send(prompt, timeout, response_format, skip=None):
             _kiro_fallback("no client")
 
-        pool.send = _send  # type: ignore[method-assign]
+        pool._send = _send  # type: ignore[method-assign]
         with pytest.raises(KnowledgeHarnessUnavailable):
             asyncio.run(pool.send_batch(["a", "b"]))
 
     def test_send_batch_still_blanks_any_other_failure(self):
-        pool = LLMPool.__new__(LLMPool)
+        pool = LLMPool(pool_size=1)
 
-        async def _send(prompt, timeout=0):
+        async def _send(prompt, timeout, response_format, skip=None):
             raise RuntimeError("worker died")
 
-        pool.send = _send  # type: ignore[method-assign]
+        pool._send = _send  # type: ignore[method-assign]
         assert asyncio.run(pool.send_batch(["a", "b"])) == ["", ""]
 
     def test_extractor_raises_the_refusal(self, lts, pool):
