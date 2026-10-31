@@ -236,7 +236,14 @@ class SessionWorker(_pool.Worker):
         if applied is None:
             self._effort_unset.add(model)
 
-    async def send_message(self, prompt: str, timeout: float = _pool.DEFAULT_TIMEOUT) -> str:
+    async def send_message(
+        self,
+        prompt: str,
+        timeout: float = _pool.DEFAULT_TIMEOUT,
+        *,
+        response_format: dict | None = None,
+    ) -> str:
+        # A reply schema binds only the OpenAI-compatible worker; the pool never sends one here.
         if self._closed:
             raise _pool.LLMPoolClosed()
         try:

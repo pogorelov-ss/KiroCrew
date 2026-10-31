@@ -40,9 +40,11 @@ class _FakePool:
         fallback_effort: str = "",
         config_pool_size_key: str | None = None,
         sessions=None,
+        use_extraction_provider: bool = False,
     ) -> None:
         self.pool_size = pool_size
         self.sessions = sessions
+        self.use_extraction_provider = use_extraction_provider
         self.effort = effort
         self.effort_key = effort_key
         self.fallback_effort = fallback_effort
@@ -143,6 +145,8 @@ class TestKnowledgePoolSetup:
         assert extraction.config_pool_size_key == "extraction_pool_size"
         # The pool reaches the gateway's session manager, so KAS can run extraction.
         assert extraction.sessions() is session_manager
+        # The extraction pool may move to an OpenAI-compatible endpoint.
+        assert extraction.use_extraction_provider is True
         assert extractor_calls[0]["pool"] is extraction
         assert app["knowledge_extraction_pool"] is extraction
         assert "knowledge_fetch_pool" not in app

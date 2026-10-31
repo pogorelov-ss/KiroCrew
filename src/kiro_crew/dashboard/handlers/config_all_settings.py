@@ -126,6 +126,8 @@ READONLY_REASONS: dict[str, str] = {
     "wakatime.send_heartbeats": WHY_SHARE,
     # Lets memory and knowledge text leave this machine for a remote Ollama host.
     "memory.ollama_allow_remote": WHY_SHARE,
+    # Lets knowledge text leave this machine for a remote extraction endpoint.
+    "knowledge.extraction_allow_remote": WHY_SHARE,
     # On, each turn's spans go to the collector the config or the gateway's
     # environment names (tracing/otlp.py:206-237); this route refuses the same
     # for telemetry.enabled (core_config_patch.py:664-690).

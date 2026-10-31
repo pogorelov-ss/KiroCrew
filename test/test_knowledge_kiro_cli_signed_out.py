@@ -186,10 +186,12 @@ class TestTheBatchAnswersAtTheFirstRefusal:
 
 
 class _RefusingPool:
-    async def send(self, prompt: str, timeout: float = 0) -> str:
+    async def send(self, prompt: str, timeout: float = 0, *, response_format=None) -> str:
         raise KnowledgeKiroCliSignedOut()
 
-    async def send_batch(self, prompts: list[str], timeout: float = 0) -> list[str]:
+    async def send_batch(
+        self, prompts: list[str], timeout: float = 0, *, response_format=None
+    ) -> list[str]:
         raise KnowledgeKiroCliSignedOut()
 
 

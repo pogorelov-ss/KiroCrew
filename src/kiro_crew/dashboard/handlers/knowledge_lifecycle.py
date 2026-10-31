@@ -288,6 +288,9 @@ def setup_knowledge_routes(app: web.Application) -> None:
             config_pool_size_key="extraction_pool_size",
             # On KAS the pool runs each chunk on the gateway's background runtime.
             sessions=lambda: getattr(app["state"], "sessions", None),
+            # knowledge.extraction_provider may move extraction to an
+            # OpenAI-compatible endpoint.
+            use_extraction_provider=True,
         )
         embedder = _create_embedder(app)
         pipeline = IngestionPipeline(

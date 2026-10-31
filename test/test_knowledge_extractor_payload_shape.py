@@ -26,10 +26,10 @@ class _Pool:
     def __init__(self, reply: dict) -> None:
         self.reply = json.dumps(reply)
 
-    async def send_batch(self, prompts, timeout=60.0):
+    async def send_batch(self, prompts, timeout=60.0, *, response_format=None):
         return [self.reply for _ in prompts]
 
-    async def send(self, prompt, timeout=60.0):
+    async def send(self, prompt, timeout=60.0, *, response_format=None):
         return ""
 
 
