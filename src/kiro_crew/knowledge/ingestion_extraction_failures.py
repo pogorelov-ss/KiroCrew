@@ -42,6 +42,18 @@ def extraction_incomplete_message(failed: int, total: int) -> str | None:
     return f"{EXTRACTION_INCOMPLETE_PREFIX}{failed} of {total} chunks"
 
 
+def _summary_inputs_changed(total: int, unextracted: int) -> bool:
+    """Whether an ingest gave the source summary anything new to summarize.
+
+    The summary is built from the source's chunk summaries, and a chunk whose
+    extraction failed has none. When every chunk failed, the inputs are what the
+    last summary already saw, and the request would go to the same endpoint
+    that just failed: on a hung local endpoint that is a second timeout per
+    document for no change.
+    """
+    return not (total and unextracted >= total)
+
+
 def _count_failed_extractions(extractions: list[dict], total: int, label: str) -> int:
     failed = sum(1 for extraction in extractions if extraction_failed(extraction))
     if failed:

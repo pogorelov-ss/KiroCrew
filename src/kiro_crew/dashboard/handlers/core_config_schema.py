@@ -47,6 +47,9 @@ from kiro_crew.config.sections import (
     DECISION_BUCKET_MIN,
     DECISION_MODEL_ROUTE_TIERS,
     EXTERNAL_TERMINAL_APPS,
+    EXTRACTION_PROVIDERS,
+    EXTRACTION_TIMEOUT_SECS_MAX,
+    EXTRACTION_TIMEOUT_SECS_MIN,
     FEATURE_PREVIEW_FLAGS,
     FOLDER_SORT_MODES,
     JUDGE_PROVIDERS,
@@ -444,6 +447,17 @@ _EDITABLE_CONFIG: dict[str, dict] = {
         "type": "int",
         "min": EXTRACTION_POOL_SIZE_MIN,
         "max": EXTRACTION_POOL_SIZE_MAX,
+    },
+    # Local OpenAI-compatible extraction endpoint. Where chunks may go
+    # (knowledge.extraction_base_url, knowledge.extraction_allow_remote) is
+    # deliberately absent: it is set in config.json only, so neither this PATCH
+    # route nor an agent's change card can point document chunks at a new host.
+    "knowledge.extraction_provider": {"type": "enum", "values": list(EXTRACTION_PROVIDERS)},
+    "knowledge.extraction_endpoint_model": {"type": "str", "max_len": 256},
+    "knowledge.extraction_timeout_secs": {
+        "type": "int",
+        "min": EXTRACTION_TIMEOUT_SECS_MIN,
+        "max": EXTRACTION_TIMEOUT_SECS_MAX,
     },
     # Computer use — BUDGET KNOBS ONLY. There is deliberately no
     # "computer_use.enabled" key here: the primary enable lives on the keystone

@@ -2836,7 +2836,12 @@
         "embed_rate_limit": 120,
         "extraction_model": "",
         "extraction_pool_size": 3,
-        "extraction_effort": ""
+        "extraction_effort": "",
+        "extraction_provider": "acp",
+        "extraction_base_url": "",
+        "extraction_endpoint_model": "",
+        "extraction_timeout_secs": 180,
+        "extraction_allow_remote": false
       }
     },
     {
@@ -3103,6 +3108,79 @@
       ],
       "defaultValue": "",
       "requiresRestart": true
+    },
+    {
+      "path": "knowledge.extraction_provider",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "label": "Extraction Provider",
+      "help": "Where per-chunk entity extraction runs. 'acp' (default) uses the agent harness, like every other Knowledge worker. 'openai_compat' sends each chunk as one independent request to an OpenAI-compatible /chat/completions endpoint (a local server such as Lemonade, llama.cpp or Ollama), set by extraction_base_url and extraction_endpoint_model. A failed or timed-out request records the chunk as failed for a later retry; it is never sent to the harness instead. URL fetching always stays on the harness. Applies when the extraction pool next goes idle.",
+      "hasChildren": false,
+      "enumValues": [
+        "acp",
+        "openai_compat"
+      ],
+      "defaultValue": "acp"
+    },
+    {
+      "path": "knowledge.extraction_base_url",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "label": "Extraction Endpoint Base URL",
+      "help": "Base URL of the OpenAI-compatible server for extraction_provider='openai_compat', up to and including the API version segment (e.g. 'http://localhost:13305/api/v1'); '/chat/completions' is appended. Only localhost and loopback IP addresses are accepted unless extraction_allow_remote is on.",
+      "hasChildren": false,
+      "enumValues": null,
+      "defaultValue": ""
+    },
+    {
+      "path": "knowledge.extraction_endpoint_model",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "label": "Extraction Endpoint Model",
+      "help": "Model name sent to the OpenAI-compatible endpoint, exactly as that server lists it. Separate from extraction_model, which picks the harness model.",
+      "hasChildren": false,
+      "enumValues": null,
+      "defaultValue": ""
+    },
+    {
+      "path": "knowledge.extraction_timeout_secs",
+      "kind": "core",
+      "type": "integer",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "label": "Extraction Endpoint Timeout (seconds)",
+      "help": "Per-request timeout for the OpenAI-compatible endpoint. A local model serving several workers at once is slower per request than a cloud one. After a request fails, the rest of that document's chunks are not sent to the endpoint again in the same pass.",
+      "hasChildren": false,
+      "enumValues": null,
+      "defaultValue": 180
+    },
+    {
+      "path": "knowledge.extraction_allow_remote",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "label": "Allow Remote Extraction Endpoint",
+      "help": "Chunks are your private documents. Off, extraction_base_url must be localhost or a loopback IP address (127.0.0.0/8, ::1) and anything else is refused; a host name that merely resolves to loopback is refused too. On, the chunks are sent to the non-loopback host you named.",
+      "hasChildren": false,
+      "enumValues": null,
+      "defaultValue": false
     },
     {
       "path": "skills",

@@ -241,6 +241,8 @@ SOFT_STOP_BUDGET_MIN = 0.5
 SOFT_STOP_BUDGET_MAX = 60.0
 EXTRACTION_POOL_SIZE_MIN = 1
 EXTRACTION_POOL_SIZE_MAX = 10
+EXTRACTION_TIMEOUT_SECS_MIN = 10
+EXTRACTION_TIMEOUT_SECS_MAX = 1800
 # Load-only bounds. Unlike the parity block above these are NOT consumed by
 # `_EDITABLE_CONFIG` — the field is config-file-only (no dashboard write path),
 # so the only clamp site is the loader. Kept out of the shared block so its

@@ -91,6 +91,10 @@ from kiro_crew.config.integration_sections import (  # noqa: F401
 )
 from kiro_crew.config.memory_sections import (  # noqa: F401
     DEFAULT_AUTO_INGEST_ARTIFACT_KINDS,
+    EXTRACTION_PROVIDER_ACP,
+    EXTRACTION_PROVIDER_OPENAI_COMPAT,
+    EXTRACTION_PROVIDERS,
+    EXTRACTION_TIMEOUT_SECS_DEFAULT,
     KnowledgeConfig,
     MemoryConfig,
     MemoryStoreConfig,
@@ -98,6 +102,7 @@ from kiro_crew.config.memory_sections import (  # noqa: F401
     SkillsConfig,
     _coerce_embedding_provider,
     _read_auto_add_documents,
+    normalize_extraction_provider,
     resolve_memory_store_config,
 )
 from kiro_crew.config.resolution import _OBSERVED_DEGRADED_SECTIONS, DEGRADED_TAILSCALE
@@ -290,6 +295,8 @@ from kiro_crew.config.sections_limits import (  # noqa: F401
     EMPTY_RESPONSE_MAX_CONTINUES_MIN,
     EXTRACTION_POOL_SIZE_MAX,
     EXTRACTION_POOL_SIZE_MIN,
+    EXTRACTION_TIMEOUT_SECS_MAX,
+    EXTRACTION_TIMEOUT_SECS_MIN,
     FILE_CHANGES_KEEP_TURNS_MIN,
     FOLDER_INGEST_CHUNK_BUDGET_MAX,
     FOLDER_SORT_DEFAULT,
