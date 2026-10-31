@@ -74,6 +74,7 @@ from kiro_crew.config.memory_sections import (
     lesson_origin_gate_mode_from,
     lesson_tier_policy_mode_from,
     member_lesson_dedup_mode_from,
+    normalize_extraction_provider,
     relevance_rule_mode_from,
     rule_authority_order_mode_from,
 )
@@ -85,6 +86,8 @@ from kiro_crew.config.sections import (
     EMBED_RATE_LIMIT_MAX,
     EXTRACTION_POOL_SIZE_MAX,
     EXTRACTION_POOL_SIZE_MIN,
+    EXTRACTION_TIMEOUT_SECS_MAX,
+    EXTRACTION_TIMEOUT_SECS_MIN,
     FOLDER_INGEST_CHUNK_BUDGET_MAX,
     IMPORT_CHUNK_BUDGET_MAX,
     SWEEP_CHUNK_BUDGET_MAX,
@@ -425,6 +428,23 @@ def _build_knowledge_config(knowledge_data: dict) -> KnowledgeConfig:
             unclamped=_safe_nonnegative_int,
         ),
         extraction_effort=coerce_effort(section.get("extraction_effort")),
+        extraction_provider=normalize_extraction_provider(section.get("extraction_provider")),
+        # The pool reads a non-string as unset, so the built section says the same.
+        extraction_base_url=(
+            url.strip() if isinstance(url := section.get("extraction_base_url"), str) else ""
+        ),
+        extraction_endpoint_model=(
+            name.strip()
+            if isinstance(name := section.get("extraction_endpoint_model"), str)
+            else ""
+        ),
+        extraction_timeout_secs=section.read(
+            "extraction_timeout_secs",
+            _safe_int,
+            EXTRACTION_TIMEOUT_SECS_MIN,
+            EXTRACTION_TIMEOUT_SECS_MAX,
+        ),
+        extraction_allow_remote=section.get("extraction_allow_remote") is True,
     )
 
 
