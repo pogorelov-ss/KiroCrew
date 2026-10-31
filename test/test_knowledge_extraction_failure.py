@@ -726,3 +726,35 @@ async def test_clearing_a_chunks_links_marks_the_graph_stale_not_rebuilt(strict_
     during, loaded, edge = await off(_clear_then_read)
     assert (during, loaded) == ([], False)
     assert edge is False
+
+
+@pytest.mark.parametrize(("failing", "summarized"), [({0, 1}, False), ({1}, True), (set(), True)])
+async def test_a_file_ingest_refreshes_the_source_summary_only_when_a_chunk_extracted(
+    strict_store, folder, monkeypatch, failing, summarized
+):
+    """Every chunk failed: the summary's inputs are unchanged, so no request is sent."""
+    pipeline = _pipeline(strict_store, failing=failing)
+    rebuilt: list[str] = []
+
+    async def _record(source_id):
+        rebuilt.append(source_id)
+
+    monkeypatch.setattr(pipeline, "generate_source_summary", _record)
+    source = await off(_add_source, strict_store, folder)
+    await FolderWatcher(strict_store, pipeline).scan_source(source)
+    assert rebuilt == ([source["id"]] if summarized else [])
+
+
+@pytest.mark.parametrize(("failing", "summarized"), [({0, 1}, False), ({0}, True)])
+async def test_a_text_ingest_refreshes_the_source_summary_only_when_a_chunk_extracted(
+    strict_store, monkeypatch, failing, summarized
+):
+    pipeline = _pipeline(strict_store, failing=failing)
+    rebuilt: list[str] = []
+
+    async def _record(source_id):
+        rebuilt.append(source_id)
+
+    monkeypatch.setattr(pipeline, "generate_source_summary", _record)
+    await pipeline.ingest_text("some body", "a note")
+    assert len(rebuilt) == (1 if summarized else 0)
