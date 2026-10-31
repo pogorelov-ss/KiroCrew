@@ -38,6 +38,7 @@ from .ingestion_budget import ImportChunkBudget, _import_chunk_budget
 from .ingestion_extraction_failures import (
     _count_failed_extractions,
     _redact_extraction,
+    _summary_inputs_changed,
     extraction_incomplete_message,
     reextract_failed_items,
 )
@@ -1264,7 +1265,7 @@ class IngestionPipeline:
             self.store.db.commit()
 
         await run_to_completion(_finalize)
-        if processed == total:
+        if processed == total and _summary_inputs_changed(total, unextracted):
             # File-level summary from chunk summaries. Best-effort, and AFTER the
             # finalize hop so a failure or cancel here cannot strand the job row.
             try:
@@ -1510,7 +1511,7 @@ class IngestionPipeline:
             self.store.db.commit()
 
         await run_to_completion(_finalize)
-        if processed == total:
+        if processed == total and _summary_inputs_changed(total, unextracted):
             # Best-effort, and AFTER the finalize hop so a failure or cancel here
             # cannot strand the job row.
             try:
