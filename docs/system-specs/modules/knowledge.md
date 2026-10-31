@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Knowledge Library is Kiro Crew's personal knowledge graph: a local, SQLite-backed corpus that ingests documents (folders, uploads, artifacts, fetched URLs), chunks and entity-extracts them via a bounded LLM worker pool, and serves hybrid retrieval (FTS5 keyword + graph traversal + optional vector) to the LLM through the `local_knowledge_search` MCP tool. All ingestion and search stay on-host; the only external calls are the extraction worker's ACP LLM turns and the gateway's own fetch of a web-page source from a listed host (`url_fetch.py`). Embedding runs in-process against a vendored runtime — the shared `EmbeddingBackend` singleton — so there is no inference endpoint of any kind.
+The Knowledge Library is Kiro Crew's personal knowledge graph: a local, SQLite-backed corpus that ingests documents (folders, uploads, artifacts, fetched URLs), chunks and entity-extracts them via a bounded LLM worker pool, and serves hybrid retrieval (FTS5 keyword + graph traversal + optional vector) to the LLM through the `local_knowledge_search` MCP tool. All ingestion and search stay on-host; the only external calls are the extraction worker's ACP LLM turns, or, with `knowledge.extraction_provider="openai_compat"`, extraction requests to an OpenAI-compatible endpoint that is loopback unless the operator opts in to a remote one (§3, "OpenAI-compatible extraction"), and the gateway's own fetch of a web-page source from a listed host (`url_fetch.py`). Embedding runs in-process against a vendored runtime — the shared `EmbeddingBackend` singleton — so there is no inference endpoint of any kind.
 
 ```
 files / uploads / artifacts / URLs
@@ -46,6 +46,11 @@ convention. There is no `knowledge_llm_pool` compatibility alias and no
 `use_config_pool_size` flag: a pool binds an explicit
 `config_pool_size_key` (extraction only), so `knowledge.extraction_pool_size`
 cannot resize the auto_research pools.
+
+Only the extraction pool is built with `use_extraction_provider=True`, so only it
+reads `knowledge.extraction_provider`. With `"openai_compat"` its workers are
+stateless HTTP workers (§3) and the effort and harness-model settings above do not
+apply to it. `auto_research` keeps its own pool, which never reads the setting.
 
 ## Role & boundary
 
@@ -116,8 +121,10 @@ The remaining gap is therefore an **A/B task-lift harness** (Tier 2), plus a flo
 | `knowledge/readers.py` | `FileReader` — per-extension text extraction; `SUPPORTED` format set |
 | `knowledge/folder_watcher.py` | `FolderWatcher` — recursive directory scan, per-file state, change/deletion detection |
 | `knowledge/watcher.py` | `KnowledgeWatcher` — polls registered sources for changes; sig-gated self-heal re-embed (single-flight, off-loop DB access) |
-| `knowledge/llm_pool.py` | `LLMPool` / `Worker` / `AcpWorker` — bounded pool of long-lived, sweep-shielded ACP workers |
-| `knowledge/extractor.py` | `EntityExtractor` — LLM entity/relation extraction over the pool |
+| `knowledge/llm_pool.py` | `LLMPool` / `Worker` / `AcpWorker` — bounded pool of long-lived, sweep-shielded ACP workers, or, for the extraction pool, the OpenAI-compatible worker below |
+| `knowledge/extraction_endpoint.py` | `ExtractionEndpoint` (the resolved `knowledge.extraction_*` settings), `endpoint_refusal` / `is_loopback_host` (the egress guard), `EndpointGate` (one per pool: refuses or allows at pool start and audits each decision) and `_audit_endpoint_decision` (its SEL row) |
+| `knowledge/openai_compat_worker.py` | `OpenAICompatWorker` — the stateless `/chat/completions` worker; `LLMPool._create_worker` imports it on first use, since it subclasses `Worker` |
+| `knowledge/extractor.py` | `EntityExtractor` — LLM entity/relation extraction over the pool; `EXTRACTION_SCHEMA` / `EXTRACTION_RESPONSE_FORMAT` (capped reply schema) |
 | `knowledge/url_fetch.py` | `fetch_page()` — the gateway's own fetch of one web page: `url_fetch_refusal()` (https, listed host) plus `link_unfurl.vet_unfurl_url` (public addresses, pinned connection) on the first URL and every redirect hop |
 | `knowledge/chunker.py` | `HeadingAwareChunker` — text/markdown/code/slide chunking |
 | `knowledge/embedder.py` | `InProcessEmbedder` — embedding in-process via the shared `EmbeddingBackend` (vendored llama-cpp runtime, no server and no HTTP hop); owns `embed_signature` (per-item vector-space identity) |
@@ -211,6 +218,10 @@ time), and new pipeline work stays in `ingestion.py`;
 | `FETCH_TIMEOUT_SECONDS` / `MAX_PAGE_BYTES` | `30.0` / 5 MiB | `url_fetch.py` | one web-page fetch, all hops included; the hop limit is `link_unfurl.MAX_REDIRECTS` |
 | `AGENT_NAME` | `"kirocrew-knowledge"` | `llm_pool.py` | kiro-cli agent the ACP worker drives |
 | `_VALID_SANDBOX_MODES` | `{auto, standard, strict, cc, off}` | `llm_pool.py` | Accepted `agent.sandbox` values |
+| `EXTRACTION_MAX_ENTITIES` / `EXTRACTION_MAX_RELATIONS` | `15` / `10` | `extractor.py` | Caps in the extraction reply schema |
+| `EXTRACTION_MAX_DESCRIPTION_CHARS` / `EXTRACTION_MAX_SUMMARY_CHARS` / `EXTRACTION_MAX_TITLE_CHARS` | `120` / `600` / `100` | `extractor.py` | String caps in the extraction reply schema |
+| `EXTRACTION_MAX_TOKENS` | `1500` | `openai_compat_worker.py` | `max_tokens` of every OpenAI-compatible extraction request (not configurable) |
+| `EXTRACTION_TIMEOUT_SECS_DEFAULT` | `180` | `config/memory_sections.py` | `knowledge.extraction_timeout_secs` default (clamped `EXTRACTION_TIMEOUT_SECS_MIN`–`_MAX`, 10–1800, in `config/sections.py`) |
 | `HARD_SKIP_DIRS` | `{.git, node_modules, __pycache__, .venv, venv, dist, build, out, target, cdk.out}` | `folder_watcher.py` | Directories never walked |
 | `_LARGE_REBUILD_WARN_THRESHOLD` | `1000` | `watcher.py` | Stale-item count at which the self-heal rebuild logs a prominent WARNING (usually an embedder-sig change invalidating the whole corpus) |
 | `DEFAULT_MAX_FILES` | `5000` | `folder_watcher.py` | Per-source file cap (newest-first) |
@@ -610,6 +621,87 @@ Entity extraction (`EntityExtractor`) acquires workers from **workload-isolated*
 
 `_get_sandbox_mode()` reads `agent.sandbox`. An **absent** value resolves to `"auto"`, the intended default: OS-level isolation, deferring to kiro-cli's own internal sandbox on macOS when that is enabled. A **present but unrecognised** value also resolves to `"auto"` (fail-secure), so a config error can never silently disable sandboxing or reach `wrap_argv` as an unknown mode. Knowledge workers honour the same `agent.sandbox` setting as chat/Slack providers (parity), so the default flows through here too.
 
+### OpenAI-compatible extraction (`OpenAICompatWorker`)
+
+`knowledge.extraction_provider="openai_compat"` makes the extraction pool build
+`OpenAICompatWorker`s, configured by `knowledge.extraction_base_url`,
+`extraction_endpoint_model`, `extraction_timeout_secs` and
+`extraction_allow_remote`. The default `"acp"` leaves every path above unchanged,
+and no model id is a code default: the endpoint model is whatever the operator's
+config names. There is no API-key setting: a loopback server needs none, and the
+worker sends no `Authorization` header.
+
+- **One request per prompt, no history.** `send_message` is one POST to
+  `{base_url}/chat/completions` with the single user message, `temperature: 0`,
+  `max_tokens: EXTRACTION_MAX_TOKENS`, `chat_template_kwargs: {"enable_thinking":
+  false}`, and the caller's `response_format` when given. `stateless = True`,
+  `reset_conversation` is a no-op and `_maybe_recycle` skips the worker, so nothing
+  accumulates. The ACP workers carry one conversation for up to
+  `WORKER_RECYCLE_CALLS` prompts; this worker never resends an earlier chunk.
+- **The schema is per call.** `EntityExtractor.extract` / `extract_batch` pass
+  `EXTRACTION_RESPONSE_FORMAT` through `LLMPool.send(..., response_format=)` /
+  `send_batch`; `AcpWorker` and `CCWorker` accept and ignore it, so the harness
+  receives the same prompt and timeout as before. The schema restates the prompt's
+  shape with caps (entities ≤ 15, relations ≤ 10, descriptions ≤ 120 chars,
+  summary ≤ 600): without them a local model over-enumerates, hits `max_tokens`
+  mid-JSON, and the reply fails to parse. `IngestionPipeline.generate_source_summary`
+  sends its topic/themes prompt (one per ingest, over the whole source's chunk
+  summaries) through the same pool with no schema, so with this provider the
+  source summary is local too. It is a separate `send`, not part of the batch,
+  so both ingest paths skip it when every chunk of the document failed
+  (`_summary_inputs_changed`): a failed chunk has no summary, so the inputs are
+  what the last summary saw, and on a hung endpoint the request would cost a
+  second timeout for the document. The re-extraction path applies the same rule
+  (below). The pool passes `response_format` to a worker only when it is not
+  `None`, so a `Worker` written against `(prompt, timeout)` keeps working.
+- **Failures raise, and nothing falls back.** An HTTP error, a timeout, an
+  unreachable server or a malformed reply raises and is logged with the URL. The
+  endpoint's `timeout_secs` replaces the caller's ACP-sized timeout, so a request
+  ends within one `extraction_timeout_secs`. There is no fallback to the harness or
+  a cloud model: the chunk is recorded as a failed extraction (see "Failed
+  extraction calls" below), which a folder sweep re-extracts later.
+  `is_alive()` is always true: a down endpoint is not fixed by replacing the worker.
+- **One failure stops the batch.** In `send_batch`, the first item whose request
+  raises while the pool's endpoint is `openai_compat` (refused, unreachable, timed
+  out, HTTP error, malformed envelope) stops the batch: items not yet sent, including
+  those waiting in `acquire()` for a worker, are not sent and yield `""`, and one
+  WARNING counts them. Requests already in flight finish on their own, so a stopped
+  or hung endpoint costs at most one request per worker, within one timeout, per
+  batch. A batch is one `extract_batch` call: one document's chunks on ingest, or
+  one file's marked chunks on re-extraction; the next batch tries the endpoint
+  again. A reply that arrives but does not parse is that chunk's failure and does
+  not stop the batch. Harness batches keep sending every item.
+- **Reasoning is detected, not trusted.** Only `message.content` is read; a reply
+  carrying `reasoning_content` logs one warning per worker, because it means the
+  template ignored `enable_thinking`.
+- **Usage.** Prompt and completion token totals are kept on the worker and logged
+  at DEBUG. `spend.py` is an estimate derived from ingestion rows with no cost
+  ledger, and a local endpoint has no cost, so nothing is recorded there.
+- **Config changes.** The pool subscribes to the five `knowledge.extraction_*`
+  endpoint keys; a change marks the pool for recycle at its next fully idle moment
+  (regardless of `pool_idle_ttl_secs`), and the next acquire rebuilds workers for
+  the new endpoint. An ingest in flight keeps the endpoint it started with.
+
+**Egress guard.** Chunks are the user's documents. `endpoint_refusal` accepts a
+`base_url` only when its host is `localhost` or a loopback IP literal
+(`127.0.0.0/8`, `::1`); any other host needs `knowledge.extraction_allow_remote:
+true` (a JSON `true`, nothing truthy). A hostname that merely resolves to loopback
+is not treated as loopback, because that answer comes from DNS. The pool checks in
+`start()` before any worker exists, and `OpenAICompatWorker.start()` checks again
+so a directly built worker cannot skip it. Every decision is a SEL
+`tool_invocation` (`operation=knowledge.extraction_endpoint`, `source=background`,
+`metadata={allow_remote, loopback}`): `outcome=approved` on each pool start that
+allows the endpoint, loopback included (a start follows an idle scale-to-zero or an
+endpoint change, so these are few), and `outcome=denied` with the reason on a
+refusal, which also raises `ExtractionEndpointRefused` and logs an ERROR. A refused
+endpoint is re-checked on every checkout, so a refusal repeated for the same
+endpoint and reason is written once while the pool lives. Where chunks may go is
+set in `config.json` only: `extraction_base_url` and `extraction_allow_remote` are
+not in `_EDITABLE_CONFIG`, so neither `PATCH /api/config` nor an agent's change card
+can point chunks at a new host. `extraction_provider`, `extraction_endpoint_model` and
+`extraction_timeout_secs` are editable and classified in `change_card_catalog` as
+unable to widen.
+
 ### Failed extraction calls
 
 A failed call and a chunk with nothing to extract must not look alike: read as the
@@ -677,7 +769,7 @@ two stay distinct:
 
 ### Pool mechanics
 
-`LLMPool.start()` reads config once off the event loop and spawns all workers; `acquire()` blocks on a semaphore when all workers are busy and transparently replaces a dead worker (`is_alive()` false) on acquire. `send()` is the acquire→send→release convenience; `send_batch()` runs prompts concurrently bounded by pool size. A failed spawn during `start()` tears down all already-started workers. After `knowledge.pool_idle_ttl_secs` (default 300; `0` disables it) of full idleness — no worker checked out — the pool scales to zero, shutting every worker down; the next `acquire()` respawns lazily. A config write reaches a running pool through `reconfigure()`, which adopts the new idle TTL at once and a new pool size at the next idle boundary.
+`LLMPool.start()` reads config once off the event loop and spawns all workers; `acquire()` blocks on a semaphore when all workers are busy and transparently replaces a dead worker (`is_alive()` false) on acquire. `send()` is the acquire→send→release convenience; `send_batch()` runs prompts concurrently bounded by pool size; on an OpenAI-compatible endpoint the first failed request stops the rest of the batch (§3, "OpenAI-compatible extraction"). A failed spawn during `start()` tears down all already-started workers. After `knowledge.pool_idle_ttl_secs` (default 300; `0` disables it) of full idleness — no worker checked out — the pool scales to zero, shutting every worker down; the next `acquire()` respawns lazily. A config write reaches a running pool through `reconfigure()`, which adopts the new idle TTL at once and a new pool size, or (extraction pool only) a new extraction endpoint, at the next idle boundary.
 
 **Untrusted-chunk delimiters (CWE-94).** `EntityExtractor` wraps each untrusted chunk in **per-request nonce-suffixed** delimiters (`<<<BEGIN_UNTRUSTED_CHUNK_{nonce}>>>` / `<<<END_UNTRUSTED_CHUNK_{nonce}>>>`, `nonce = uuid4().hex`), so content that embeds a legacy static delimiter cannot forge the boundary and inject instructions. Both `extract` (single) and `extract_batch` (the ingestion path) apply this, and the batch path mints a **distinct nonce per chunk**.
 
@@ -919,6 +1011,8 @@ Research Lab (the `auto-research` builtin app) reaches this module twice: a camp
 - **Sensitive paths never ingested** — `FileReader.read`, `FolderWatcher._walk`, `_hash_file`, and `_ingest_file` all gate on `is_sensitive_path()` (with symlink re-resolution at ingest time for TOCTOU).
 - **`.org` and unknown-but-supported extensions are plain text** — only `_DISPATCH` extensions get specialized readers; everything else in `SUPPORTED` flows through `_read_text` → generic chunker.
 - **Pool workers are long-lived and must be sweep-shielded** — any direct `AcpClient` worker that outlives a chat turn (not tracked in `SessionMap`/warm pool) must register its PID via `register_protected_pid`, or the orphan sweep will kill it mid-task.
+- **Chunks reach a non-loopback extraction endpoint only on an explicit opt-in** — `endpoint_refusal` runs before any `OpenAICompatWorker` exists and again in its `start()`; every allow and refusal is SEL-audited. There is no fallback from a failing endpoint to the harness or the cloud, and one failed request stops the rest of its batch. `test_llm_pool_openai_compat.py` is the ratchet.
+- **Only the extraction pool reads `knowledge.extraction_provider`** — `auto_research` builds its pool without `use_extraction_provider`, so it stays on a harness whatever it says.
 - **A failed extraction call is never stored as "found nothing"** — the extractor marks it, ingestion records it on the job row and marks the stored chunk, and a folder file carrying it has only those chunks re-extracted in place, up to `MAX_SCAN_ATTEMPTS` times, never at the cost of a chunk that extracted. `test_knowledge_extraction_failure.py` is the ratchet.
 - **LLM-derived text is redacted before storage and before return** — ingestion redacts extracted text (`ingestion._redact`), and `local_knowledge_search` redacts its assembled output.
 - **FTS query input is parameterized** — user query tokens are always double-quoted literals; the user never injects FTS5 operators.

@@ -35,8 +35,10 @@ class _FakePool:
         effort_key: str | None = None,
         fallback_effort: str = "",
         config_pool_size_key: str | None = None,
+        use_extraction_provider: bool = False,
     ) -> None:
         self.pool_size = pool_size
+        self.use_extraction_provider = use_extraction_provider
         self.effort = effort
         self.effort_key = effort_key
         self.fallback_effort = fallback_effort
@@ -134,6 +136,8 @@ class TestKnowledgePoolSetup:
         assert extraction.effort_key == "extraction_effort"
         assert extraction.fallback_effort == "high"
         assert extraction.config_pool_size_key == "extraction_pool_size"
+        # The extraction pool may move to an OpenAI-compatible endpoint.
+        assert extraction.use_extraction_provider is True
         assert extractor_calls[0]["pool"] is extraction
         assert app["knowledge_extraction_pool"] is extraction
         assert "knowledge_fetch_pool" not in app

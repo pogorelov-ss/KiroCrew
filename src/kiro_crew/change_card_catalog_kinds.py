@@ -257,8 +257,13 @@ _CANNOT_WIDEN_SETTINGS: frozenset[str] = frozenset(
         "knowledge.dedup_every_n_sweeps",
         "knowledge.embed_rate_limit",
         "knowledge.extraction_effort",
+        # None of the extraction_* rows here moves chunks to a new host: that is
+        # extraction_base_url / extraction_allow_remote, set in config.json only.
+        "knowledge.extraction_endpoint_model",
         "knowledge.extraction_model",
         "knowledge.extraction_pool_size",
+        "knowledge.extraction_provider",
+        "knowledge.extraction_timeout_secs",
         "knowledge.folder_ingest_chunk_budget",
         "knowledge.import_chunk_budget",
         "knowledge.sweep_chunk_budget",

@@ -246,6 +246,9 @@ def setup_knowledge_routes(app: web.Application) -> None:
             effort_key="extraction_effort",
             fallback_effort=DEFAULT_EXTRACTION_EFFORT,
             config_pool_size_key="extraction_pool_size",
+            # knowledge.extraction_provider may move extraction to an
+            # OpenAI-compatible endpoint.
+            use_extraction_provider=True,
         )
         embedder = _create_embedder(app)
         pipeline = IngestionPipeline(

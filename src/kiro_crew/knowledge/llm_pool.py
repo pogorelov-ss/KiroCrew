@@ -1,8 +1,9 @@
 """Unified LLM worker pool for Knowledge Library.
 
-Provider-agnostic bounded pool of long-lived workers (CC or ACP).
-Knowledge extraction and URL fetch use separate instances of this pool so their
-workload policies and session state remain isolated.
+Provider-agnostic bounded pool of workers: long-lived ACP or CC sessions, or
+stateless OpenAI-compatible HTTP workers for extraction. Knowledge extraction and
+auto_research use separate instances of this pool so their workload policies and
+session state remain isolated.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import os
 import shutil
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from kiro_crew import platform_compat
 from kiro_crew.agent_sdk.backends import (
@@ -43,6 +44,13 @@ from kiro_crew.sandbox import (
     scrub_agent_subprocess_env,
     wrap_argv,
     wrap_argv_async,
+)
+
+from .extraction_endpoint import (
+    _EXTRACTION_ENDPOINT_KEYS,
+    EndpointGate,
+    ExtractionEndpoint,
+    _get_extraction_endpoint,
 )
 
 try:
@@ -342,6 +350,10 @@ def _get_pool_size(config: Optional[dict] = None) -> int:
     return DEFAULT_POOL_SIZE
 
 
+class _BatchItemSkipped(Exception):
+    """A batch item not sent because the endpoint already failed in that batch."""
+
+
 def _normalize_effort(value: object) -> Optional[str]:
     """Return a valid explicit effort level, or ``None`` for provider default."""
     if value is None or value == "":
@@ -396,14 +408,23 @@ class Worker(ABC):
     # ``__init__``, so a subclass that does not chain up still has the counter
     # (``+=`` rebinds it per instance).
     calls_since_reset: int = 0
+    # True for a worker that keeps no transcript, so the pool never recycles it.
+    stateless: bool = False
 
     @abstractmethod
     async def start(self) -> None:
         """Initialize/spawn the worker process."""
 
     @abstractmethod
-    async def send_message(self, prompt: str, timeout: float = DEFAULT_TIMEOUT) -> str:
-        """Send a prompt and return the text response."""
+    async def send_message(
+        self,
+        prompt: str,
+        timeout: float = DEFAULT_TIMEOUT,
+        *,
+        response_format: Optional[dict] = None,
+    ) -> str:
+        """Send a prompt and return the text response. *response_format* (an OpenAI
+        ``response_format`` object) binds only an endpoint worker; sessions ignore it."""
 
     @abstractmethod
     async def shutdown(self) -> None:
@@ -691,7 +712,13 @@ class AcpWorker(Worker):
                 effective,
             )
 
-    async def send_message(self, prompt: str, timeout: float = DEFAULT_TIMEOUT) -> str:
+    async def send_message(
+        self,
+        prompt: str,
+        timeout: float = DEFAULT_TIMEOUT,
+        *,
+        response_format: Optional[dict] = None,
+    ) -> str:
         if self._client is None or not self._client.is_ready:
             await self.start()
         assert self._client is not None
@@ -916,7 +943,13 @@ class CCWorker(Worker):
         finally:
             await self._event_queue.put(None)
 
-    async def send_message(self, prompt: str, timeout: float = DEFAULT_TIMEOUT) -> str:
+    async def send_message(
+        self,
+        prompt: str,
+        timeout: float = DEFAULT_TIMEOUT,
+        *,
+        response_format: Optional[dict] = None,
+    ) -> str:
         if self._proc is None or self._proc.returncode is not None:
             await self._spawn()
         assert self._proc is not None and self._proc.stdin is not None
@@ -1041,8 +1074,18 @@ class LLMPool:
         effort_key: Optional[str] = None,
         fallback_effort: str = "",
         config_pool_size_key: Optional[str] = None,
+        use_extraction_provider: bool = False,
     ):
         self._pool_size = pool_size
+        # Only the extraction pool reads knowledge.extraction_provider; any
+        # other pool (auto_research) stays on a harness.
+        self._use_extraction_provider = use_extraction_provider
+        self._endpoint = ExtractionEndpoint()
+        # The endpoint the running workers were built for; differs from
+        # ``_endpoint`` while a change waits for the pool to go idle.
+        self._running_endpoint = self._endpoint
+        # Audits each start's decision; a repeated refusal is written once.
+        self._endpoint_gate = EndpointGate()
         self._effort = _normalize_effort(effort)
         # Workload-bound effort resolution: when ``effort_key`` is set, the
         # effort is re-resolved from the config read in ``start()`` (explicit
@@ -1070,7 +1113,7 @@ class LLMPool:
         self._in_use: int = 0
         self._idle_since: Optional[float] = None
         self._reaper_task: Optional["asyncio.Task[None]"] = None
-        # A width change waiting for a zero-TTL pool to go fully idle.
+        # A width or endpoint change waiting for the pool to go fully idle.
         self._resize_when_idle = False
         # The width the running workers were spawned at; ``_pool_size`` is the
         # configured width and the two differ while a resize is pending.
@@ -1085,6 +1128,7 @@ class LLMPool:
         self._config_sub = live.subscribe(
             "knowledge.pool_idle_ttl_secs",
             "knowledge.extraction_pool_size",
+            *(_EXTRACTION_ENDPOINT_KEYS if use_extraction_provider else ()),
             callback=self._on_config_change,
             name="LLMPool",
         )
@@ -1132,6 +1176,8 @@ class LLMPool:
             self._idle_ttl = _get_idle_ttl(config)
             if self._config_pool_size_key is not None:
                 self._pool_size = _get_pool_size(config)
+            if self._use_extraction_provider:
+                self._endpoint = _get_extraction_endpoint(config)
             if not self._started:
                 # The semaphore was sized at construction. A pool that has not
                 # started yet holds no worker, so it can be resized in place --
@@ -1148,6 +1194,11 @@ class LLMPool:
             # must still be applied when a later write drops the TTL to zero.
             if self._idle_ttl <= 0 and self._running_width != self._pool_size:
                 self._resize_when_idle = True
+            # An endpoint change is not left to the idle TTL: the workers are
+            # cheap to rebuild, and a user switching models to compare them
+            # expects the next ingest to use the new one.
+            if self._endpoint != self._running_endpoint:
+                self._resize_when_idle = True
         if self._resize_when_idle and self._in_use == 0:
             await self._maybe_scale_to_zero(force=True)
 
@@ -1163,6 +1214,10 @@ class LLMPool:
             # Read config once, off the event loop, and reuse for every worker.
             config = await asyncio.to_thread(_read_config)
             self._provider_type = _get_provider_type(config)
+            if self._use_extraction_provider:
+                self._endpoint = _get_extraction_endpoint(config)
+                if self._endpoint.is_openai_compat:
+                    await self._endpoint_gate.authorize(self._endpoint)
             # A workload-specific config key (knowledge.extraction_pool_size)
             # overrides the constructor size ONLY when the pool declares that
             # key and the operator has explicitly set it in config.
@@ -1183,6 +1238,7 @@ class LLMPool:
             self._running_width = self._pool_size
             self._idle_ttl = _get_idle_ttl(config)
             self._config = config
+            self._running_endpoint = self._endpoint
             try:
                 for i in range(self._pool_size):
                     worker = await self._create_worker()
@@ -1202,11 +1258,10 @@ class LLMPool:
             self._started = True
             if self._idle_ttl > 0 and self._reaper_task is None:
                 self._reaper_task = asyncio.create_task(self._idle_reaper())
-            logger.info(
-                "LLMPool started: %d workers, provider=%s",
-                self._pool_size,
-                self._provider_type,
-            )
+            target = f"provider={self._provider_type}"
+            if self._endpoint.is_openai_compat:
+                target = f"endpoint={self._endpoint.base_url} model={self._endpoint.model}"
+            logger.info("LLMPool started: %d workers, %s", self._pool_size, target)
 
     async def _create_worker(self) -> Worker:
         """Create and start a new worker based on provider type.
@@ -1223,8 +1278,13 @@ class LLMPool:
         the same reason ``start`` offloads its own read.
         """
         sandbox_mode = await asyncio.to_thread(_get_sandbox_mode)
-        if is_claude_code(self._provider_type):
-            worker: Worker = CCWorker(sandbox_mode=sandbox_mode)
+        if self._endpoint.is_openai_compat:
+            # Imported here: the worker module subclasses Worker from this one.
+            from .openai_compat_worker import OpenAICompatWorker
+
+            worker: Worker = OpenAICompatWorker(self._endpoint)
+        elif is_claude_code(self._provider_type):
+            worker = CCWorker(sandbox_mode=sandbox_mode)
         else:
             worker = AcpWorker(
                 sandbox_mode=sandbox_mode,
@@ -1382,11 +1442,32 @@ class LLMPool:
         self,
         prompt: str,
         timeout: float = DEFAULT_TIMEOUT,
+        *,
+        response_format: Optional[dict] = None,
     ) -> str:
-        """Convenience: acquire a worker, send prompt, release, return response."""
+        """Acquire a worker, send prompt, release, return response. *response_format*
+        reaches the worker only when given, so a ``(prompt, timeout)`` Worker still works."""
+        return await self._send(prompt, timeout, response_format)
+
+    async def _send(
+        self,
+        prompt: str,
+        timeout: float,
+        response_format: Optional[dict],
+        skip: Optional[Callable[[], bool]] = None,
+    ) -> str:
+        """``send``, but raise ``_BatchItemSkipped`` if *skip* says so once a worker is
+        held: an item can wait in ``acquire`` while another item's request fails."""
         idx, worker = await self.acquire()
+        if skip is not None and skip():
+            self.release(idx)
+            raise _BatchItemSkipped()
         try:
-            return await worker.send_message(prompt, timeout=timeout)
+            if response_format is None:
+                return await worker.send_message(prompt, timeout=timeout)
+            return await worker.send_message(
+                prompt, timeout=timeout, response_format=response_format
+            )
         finally:
             try:
                 await self._maybe_recycle(idx, worker)
@@ -1403,8 +1484,11 @@ class LLMPool:
         transcript every time it fires.
 
         A failed reset is not fatal: the worker is left reporting dead and
-        ``acquire()`` replaces it on the next checkout.
+        ``acquire()`` replaces it on the next checkout. A stateless worker has no
+        transcript and is never recycled.
         """
+        if worker.stateless:
+            return
         worker.calls_since_reset += 1
         try:
             pct = worker.context_pct()
@@ -1424,24 +1508,53 @@ class LLMPool:
                 exc_info=True,
             )
 
-    async def send_batch(self, prompts: list[str], timeout: float = DEFAULT_TIMEOUT) -> list[str]:
+    async def send_batch(
+        self,
+        prompts: list[str],
+        timeout: float = DEFAULT_TIMEOUT,
+        *,
+        response_format: Optional[dict] = None,
+    ) -> list[str]:
         """Send multiple prompts concurrently, bounded by pool size.
 
-        Returns responses in same order as prompts.
+        Returns responses in same order as prompts. A failed item yields ``""``.
+        On an OpenAI-compatible endpoint the first failed request (refused,
+        unreachable, timed out, an HTTP error or a malformed reply) stops the
+        batch: unsent items yield ``""``, so a stopped or hung endpoint costs one
+        request timeout per batch, not one per chunk. In-flight requests finish
+        on their own. Harness workers keep sending every item.
         """
         if not prompts:
             return []
 
         results: list[str] = [""] * len(prompts)
+        endpoint_failed = False
+        skipped = 0
 
         async def _do_one(idx: int, prompt: str) -> None:
+            nonlocal endpoint_failed, skipped
+            if endpoint_failed:
+                skipped += 1
+                return
             try:
-                results[idx] = await self.send(prompt, timeout=timeout)
+                results[idx] = await self._send(
+                    prompt, timeout, response_format, lambda: endpoint_failed
+                )
+            except _BatchItemSkipped:
+                skipped += 1
             except Exception as e:
                 logger.warning("LLMPool: batch item %d failed: %s", idx, e)
                 results[idx] = ""
+                if self._endpoint.is_openai_compat:
+                    endpoint_failed = True
 
         await asyncio.gather(*[_do_one(i, p) for i, p in enumerate(prompts)])
+        if skipped:
+            logger.warning(
+                "LLMPool: extraction endpoint failed; %d of %d batch items not sent",
+                skipped,
+                len(prompts),
+            )
         return results
 
     async def shutdown(self) -> None:

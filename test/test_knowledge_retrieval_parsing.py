@@ -137,7 +137,7 @@ class TestEntityExtractorExtended:
         import asyncio
 
         class MockPool:
-            async def send(self, prompt, timeout=60.0):
+            async def send(self, prompt, timeout=60.0, **_kwargs):
                 return json.dumps(
                     {
                         "entities": [{"name": "Svc", "type": "service", "description": "A"}],
@@ -147,7 +147,7 @@ class TestEntityExtractorExtended:
                     }
                 )
 
-            async def send_batch(self, prompts, timeout=60.0):
+            async def send_batch(self, prompts, timeout=60.0, **_kwargs):
                 return [await self.send(p, timeout) for p in prompts]
 
         ext = EntityExtractor(pool=MockPool())
@@ -159,10 +159,10 @@ class TestEntityExtractorExtended:
         import asyncio
 
         class BadPool:
-            async def send(self, prompt, timeout=60.0):
+            async def send(self, prompt, timeout=60.0, **_kwargs):
                 raise RuntimeError("fail")
 
-            async def send_batch(self, prompts, timeout=60.0):
+            async def send_batch(self, prompts, timeout=60.0, **_kwargs):
                 raise RuntimeError("fail")
 
         ext = EntityExtractor(pool=BadPool())
@@ -176,7 +176,7 @@ class TestEntityExtractorExtended:
         assert not extraction_failed(asyncio.run(EntityExtractor(pool=None).extract("text")))
 
         class Pool:
-            async def send_batch(self, prompts, timeout=60.0):
+            async def send_batch(self, prompts, timeout=60.0, **_kwargs):
                 return ['{"entities": [], "relations": [], "summary": "s"}' for _ in prompts]
 
         results = asyncio.run(EntityExtractor(pool=Pool()).extract_batch(["   ", "body"]))
@@ -186,7 +186,7 @@ class TestEntityExtractorExtended:
         import asyncio
 
         class Pool:
-            async def send_batch(self, prompts, timeout=60.0):
+            async def send_batch(self, prompts, timeout=60.0, **_kwargs):
                 # The pool's batch path turns a failed call into "".
                 return ['{"entities": [], "summary": "ok"}', "", "no json here"]
 
@@ -198,7 +198,7 @@ class TestEntityExtractorExtended:
         import asyncio
 
         class Pool:
-            async def send_batch(self, prompts, timeout=60.0):
+            async def send_batch(self, prompts, timeout=60.0, **_kwargs):
                 raise RuntimeError("endpoint down")
 
         results = asyncio.run(EntityExtractor(pool=Pool()).extract_batch(["a", "", "c"]))
@@ -639,11 +639,11 @@ class TestEntityExtractorNonceDelimiters:
             def __init__(self):
                 self.prompt: str | None = None
 
-            async def send(self, prompt, timeout=60.0):
+            async def send(self, prompt, timeout=60.0, **_kwargs):
                 self.prompt = prompt
                 return "{}"
 
-            async def send_batch(self, prompts, timeout=60.0):
+            async def send_batch(self, prompts, timeout=60.0, **_kwargs):
                 return [await self.send(p, timeout) for p in prompts]
 
         pool = CapturePool()
@@ -668,10 +668,10 @@ class TestEntityExtractorNonceDelimiters:
             def __init__(self):
                 self.prompts: list[str] = []
 
-            async def send(self, prompt, timeout=60.0):
+            async def send(self, prompt, timeout=60.0, **_kwargs):
                 return "{}"
 
-            async def send_batch(self, prompts, timeout=60.0):
+            async def send_batch(self, prompts, timeout=60.0, **_kwargs):
                 # Record ALL prompts passed to the batch send.
                 self.prompts = list(prompts)
                 return ["{}" for _ in prompts]

@@ -53,6 +53,70 @@ JSON:"""
 
 EXTRACTION_TIMEOUT = 60.0
 
+# Reply schema for an endpoint that enforces ``response_format`` (the
+# OpenAI-compatible extraction worker; harness workers ignore it). It restates
+# EXTRACTION_PROMPT's shape and adds CAPS the prompt does not: uncapped, a local
+# model over-enumerates entities and long descriptions until it hits max_tokens
+# mid-JSON and the reply fails to parse. With these caps every reply in a
+# 20-chunk evaluation parsed.
+_ENTITY_TYPES = ["person", "service", "api", "concept", "org", "technology"]
+_RELATION_TYPES = ["owns", "uses", "works_on", "part_of", "calls", "depends_on"]
+_CATEGORIES = [
+    "design_doc", "runbook", "meeting_notes", "code_doc", "presentation",
+    "report", "policy", "personal_notes", "external_reference",
+]
+EXTRACTION_MAX_ENTITIES = 15
+EXTRACTION_MAX_RELATIONS = 10
+EXTRACTION_MAX_DESCRIPTION_CHARS = 120
+EXTRACTION_MAX_SUMMARY_CHARS = 600
+EXTRACTION_MAX_TITLE_CHARS = 100
+
+EXTRACTION_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string", "maxLength": EXTRACTION_MAX_TITLE_CHARS},
+        "entities": {
+            "type": "array",
+            "maxItems": EXTRACTION_MAX_ENTITIES,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "type": {"type": "string", "enum": _ENTITY_TYPES},
+                    "description": {
+                        "type": "string", "maxLength": EXTRACTION_MAX_DESCRIPTION_CHARS,
+                    },
+                },
+                "required": ["name", "type", "description"],
+            },
+        },
+        "relations": {
+            "type": "array",
+            "maxItems": EXTRACTION_MAX_RELATIONS,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string"},
+                    "target": {"type": "string"},
+                    "type": {"type": "string", "enum": _RELATION_TYPES},
+                    "description": {
+                        "type": "string", "maxLength": EXTRACTION_MAX_DESCRIPTION_CHARS,
+                    },
+                },
+                "required": ["source", "target", "type", "description"],
+            },
+        },
+        "category": {"type": "string", "enum": _CATEGORIES},
+        "summary": {"type": "string", "maxLength": EXTRACTION_MAX_SUMMARY_CHARS},
+    },
+    "required": ["title", "entities", "relations", "category", "summary"],
+}
+
+EXTRACTION_RESPONSE_FORMAT: dict = {
+    "type": "json_schema",
+    "json_schema": {"name": "extraction", "schema": EXTRACTION_SCHEMA},
+}
+
 
 def _empty_result() -> dict:
     return {"title": "", "entities": [], "relations": [], "category": "document", "summary": ""}
@@ -94,7 +158,9 @@ class EntityExtractor:
                 begin_marker=f"<<<BEGIN_UNTRUSTED_CHUNK_{nonce}>>>",
                 end_marker=f"<<<END_UNTRUSTED_CHUNK_{nonce}>>>",
             )
-            response = await self._pool.send(prompt, timeout=EXTRACTION_TIMEOUT)
+            response = await self._pool.send(
+                prompt, timeout=EXTRACTION_TIMEOUT, response_format=EXTRACTION_RESPONSE_FORMAT
+            )
             return self._parse_response(response)
         except Exception as exc:
             logger.warning("EntityExtractor: extraction call failed: %s", exc)
@@ -116,7 +182,9 @@ class EntityExtractor:
                 )
             )
         try:
-            responses = await self._pool.send_batch(prompts, timeout=EXTRACTION_TIMEOUT)
+            responses = await self._pool.send_batch(
+                prompts, timeout=EXTRACTION_TIMEOUT, response_format=EXTRACTION_RESPONSE_FORMAT
+            )
             results = [_empty_result() for _ in chunks]
             for idx, response in zip(non_empty_indices, responses):
                 results[idx] = self._parse_response(response)

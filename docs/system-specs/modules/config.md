@@ -3308,6 +3308,11 @@ class KnowledgeConfig:
     auto_ingest_artifact_kinds: list[str] = ["markdown", "text", "html", "json"]  # reader-extractable kinds (widget/svg excluded)
     embed_timeout_secs: float = 10.0                    # per-request embed timeout; 0/unset -> built-in TIMEOUT (10s)
     embed_content_budget: int = 0                       # chunk-content fold budget (chars); 0/unset -> built-in _EMBED_CONTENT_BUDGET
+    extraction_provider: str = "acp"                    # "acp" | "openai_compat"; unknown -> "acp". Extraction pool only (knowledge.md §3)
+    extraction_base_url: str = ""                       # OpenAI-compatible base URL; loopback-only unless extraction_allow_remote
+    extraction_endpoint_model: str = ""                 # model name the endpoint lists; no code default
+    extraction_timeout_secs: int = 180                  # per-request timeout; clamped EXTRACTION_TIMEOUT_SECS_MIN..MAX (10-1800)
+    extraction_allow_remote: bool = False               # only a JSON true opts in to a non-loopback endpoint
 
 @dataclass
 class ChannelConfig:

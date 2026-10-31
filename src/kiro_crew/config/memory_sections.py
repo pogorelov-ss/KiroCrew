@@ -418,6 +418,24 @@ def _coerce_embedding_provider(raw: str) -> str:
     return field_default(MemoryConfig, "embedding_provider")
 
 
+# knowledge.extraction_provider values. "acp" keeps extraction on the agent
+# harness; "openai_compat" sends each chunk to an OpenAI-compatible endpoint.
+EXTRACTION_PROVIDER_ACP = "acp"
+EXTRACTION_PROVIDER_OPENAI_COMPAT = "openai_compat"
+EXTRACTION_PROVIDERS = (EXTRACTION_PROVIDER_ACP, EXTRACTION_PROVIDER_OPENAI_COMPAT)
+EXTRACTION_TIMEOUT_SECS_DEFAULT = 180
+
+
+def normalize_extraction_provider(value: object) -> str:
+    """``knowledge.extraction_provider`` as a known value; anything else is ``"acp"``.
+
+    An unknown value keeps the harness path rather than guessing an endpoint.
+    """
+    if isinstance(value, str) and value.strip() in EXTRACTION_PROVIDERS:
+        return value.strip()
+    return EXTRACTION_PROVIDER_ACP
+
+
 @dataclass
 class KnowledgeConfig:
     """Knowledge Library ingestion settings.
@@ -616,6 +634,63 @@ class KnowledgeConfig:
             "runs the default high. Only applies on reasoning-capable models.",
             enum=["", *EFFORT_LEVELS],
             restart=True,
+        ),
+    )
+    extraction_provider: str = field(
+        default=EXTRACTION_PROVIDER_ACP,
+        metadata=_meta(
+            "Extraction Provider",
+            "Where per-chunk entity extraction runs. 'acp' (default) uses the "
+            "agent harness, like every other Knowledge worker. 'openai_compat' "
+            "sends each chunk as one independent request to an OpenAI-compatible "
+            "/chat/completions endpoint (a local server such as Lemonade, "
+            "llama.cpp or Ollama), set by extraction_base_url and "
+            "extraction_endpoint_model. A failed or timed-out request records the "
+            "chunk as failed for a later retry; it is never sent to the harness "
+            "instead. URL fetching always stays on the harness. Applies when the "
+            "extraction pool next goes idle.",
+            enum=list(EXTRACTION_PROVIDERS),
+        ),
+    )
+    extraction_base_url: str = field(
+        default="",
+        metadata=_meta(
+            "Extraction Endpoint Base URL",
+            "Base URL of the OpenAI-compatible server for extraction_provider="
+            "'openai_compat', up to and including the API version segment (e.g. "
+            "'http://localhost:13305/api/v1'); '/chat/completions' is appended. "
+            "Only localhost and loopback IP addresses are accepted unless "
+            "extraction_allow_remote is on.",
+        ),
+    )
+    extraction_endpoint_model: str = field(
+        default="",
+        metadata=_meta(
+            "Extraction Endpoint Model",
+            "Model name sent to the OpenAI-compatible endpoint, exactly as that "
+            "server lists it. Separate from extraction_model, which picks the "
+            "harness model.",
+        ),
+    )
+    extraction_timeout_secs: int = field(
+        default=EXTRACTION_TIMEOUT_SECS_DEFAULT,
+        metadata=_meta(
+            "Extraction Endpoint Timeout (seconds)",
+            "Per-request timeout for the OpenAI-compatible endpoint. A local model "
+            "serving several workers at once is slower per request than a cloud "
+            "one. After a request fails, the rest of that document's chunks are "
+            "not sent to the endpoint again in the same pass.",
+        ),
+    )
+    extraction_allow_remote: bool = field(
+        default=False,
+        metadata=_meta(
+            "Allow Remote Extraction Endpoint",
+            "Chunks are your private documents. Off, extraction_base_url must be "
+            "localhost or a loopback IP address (127.0.0.0/8, ::1) and anything "
+            "else is refused; a host name that merely resolves to loopback is "
+            "refused too. On, the chunks are sent to the non-loopback host you "
+            "named.",
         ),
     )
 
