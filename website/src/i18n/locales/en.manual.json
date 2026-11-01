@@ -6751,7 +6751,23 @@
         "retry": "Retry",
         "extraction_effort_label": "Extraction effort",
         "effort_hint": "Default runs High effort until you pick a level.",
-        "effort_model_unknown_hint": "The model is picked at run time, so effort applies only when the resolved model supports it. Default runs High effort."
+        "effort_model_unknown_hint": "The model is picked at run time, so effort applies only when the resolved model supports it. Default runs High effort.",
+        "provider_label": "Extraction runs on",
+        "provider_desc": "Where each chunk's entity extraction runs. A local endpoint keeps document chunks on this machine and spends no cloud tokens.",
+        "provider_harness": "Agent harness",
+        "provider_endpoint": "Local endpoint",
+        "endpoint_url_label": "Endpoint URL",
+        "endpoint_url_desc": "Set knowledge.extraction_base_url in config.json. It decides where document chunks go, so it is shown here but cannot be changed here.",
+        "endpoint_url_unset": "Not set",
+        "endpoint_model_label": "Endpoint model",
+        "endpoint_model_desc": "The model name as your server lists it.",
+        "endpoint_model_listed_desc": "Models your server lists.",
+        "endpoint_model_unlisted_desc": "Couldn't read the server's model list ({{error}}). Type the model name as your server lists it.",
+        "endpoint_model_choose": "Choose a model",
+        "endpoint_model_placeholder": "model name",
+        "endpoint_timeout_label": "Request timeout (seconds)",
+        "endpoint_timeout_desc": "How long one chunk's request may take before the chunk is recorded as failed (10–1800 seconds).",
+        "harness_unused_hint": "Not used while extraction runs on a local endpoint."
       }
     },
     "libraryPage": {

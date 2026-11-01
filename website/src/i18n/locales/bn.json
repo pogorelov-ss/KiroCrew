@@ -14570,7 +14570,23 @@
         "retry": "Retry",
         "extraction_effort_label": "এক্সট্রাকশন এফোর্ট",
         "effort_hint": "একটি স্তর বেছে নেওয়া পর্যন্ত ডিফল্ট High effort ব্যবহার করে।",
-        "effort_model_unknown_hint": "মডেল রান টাইমে বেছে নেওয়া হয়, তাই effort প্রযোজ্য হয় শুধুমাত্র যখন নির্ধারিত মডেল এটি সমর্থন করে। ডিফল্ট High effort ব্যবহার করে।"
+        "effort_model_unknown_hint": "মডেল রান টাইমে বেছে নেওয়া হয়, তাই effort প্রযোজ্য হয় শুধুমাত্র যখন নির্ধারিত মডেল এটি সমর্থন করে। ডিফল্ট High effort ব্যবহার করে।",
+        "provider_label": "এক্সট্র্যাকশন কোথায় চলে",
+        "provider_desc": "প্রতিটি চাঙ্কের এন্টিটি এক্সট্র্যাকশন কোথায় চলে। লোকাল এন্ডপয়েন্ট ডকুমেন্টের চাঙ্ক এই মেশিনেই রাখে এবং কোনো ক্লাউড টোকেন খরচ করে না।",
+        "provider_harness": "এজেন্ট হারনেস",
+        "provider_endpoint": "লোকাল এন্ডপয়েন্ট",
+        "endpoint_url_label": "এন্ডপয়েন্ট URL",
+        "endpoint_url_desc": "config.json-এ knowledge.extraction_base_url সেট করো। ডকুমেন্টের চাঙ্ক কোথায় যাবে তা এটিই ঠিক করে, তাই এখানে দেখানো হয় কিন্তু এখানে বদলানো যায় না।",
+        "endpoint_url_unset": "সেট করা নেই",
+        "endpoint_model_label": "এন্ডপয়েন্ট মডেল",
+        "endpoint_model_desc": "তোমার সার্ভার যেভাবে দেখায় সেই মডেলের নাম।",
+        "endpoint_model_listed_desc": "তোমার সার্ভার যে মডেলগুলো দেখায়।",
+        "endpoint_model_unlisted_desc": "সার্ভারের মডেল তালিকা পড়া যায়নি ({{error}})। তোমার সার্ভার যেভাবে দেখায় সেভাবে মডেলের নাম লেখো।",
+        "endpoint_model_choose": "একটি মডেল বেছে নাও",
+        "endpoint_model_placeholder": "মডেলের নাম",
+        "endpoint_timeout_label": "অনুরোধের টাইমআউট (সেকেন্ড)",
+        "endpoint_timeout_desc": "একটি চাঙ্কের অনুরোধ ব্যর্থ হিসেবে লেখার আগে কতক্ষণ চলতে পারে (10–1800 সেকেন্ড)।",
+        "harness_unused_hint": "এক্সট্র্যাকশন লোকাল এন্ডপয়েন্টে চলার সময় এটি ব্যবহার হয় না।"
       }
     },
     "localStorageDebug": {

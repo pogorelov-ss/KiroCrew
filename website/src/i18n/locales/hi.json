@@ -14570,7 +14570,23 @@
         "retry": "Retry",
         "extraction_effort_label": "एक्सट्रैक्शन एफ़र्ट",
         "effort_hint": "कोई स्तर चुनने तक, डिफ़ॉल्ट रूप से High effort चलता है।",
-        "effort_model_unknown_hint": "मॉडल रनटाइम पर चुना जाता है, इसलिए effort तभी लागू होता है जब चुना गया मॉडल उसे सपोर्ट करता हो। डिफ़ॉल्ट High effort चलता है।"
+        "effort_model_unknown_hint": "मॉडल रनटाइम पर चुना जाता है, इसलिए effort तभी लागू होता है जब चुना गया मॉडल उसे सपोर्ट करता हो। डिफ़ॉल्ट High effort चलता है।",
+        "provider_label": "एक्सट्रैक्शन कहाँ चलता है",
+        "provider_desc": "हर चंक का एंटिटी एक्सट्रैक्शन कहाँ चलता है। लोकल एंडपॉइंट दस्तावेज़ के चंक इसी मशीन पर रखता है और कोई क्लाउड टोकन खर्च नहीं करता।",
+        "provider_harness": "एजेंट हार्नेस",
+        "provider_endpoint": "लोकल एंडपॉइंट",
+        "endpoint_url_label": "एंडपॉइंट URL",
+        "endpoint_url_desc": "config.json में knowledge.extraction_base_url सेट करो। यह तय करता है कि दस्तावेज़ के चंक कहाँ जाएँ, इसलिए यह यहाँ दिखता है पर यहाँ बदला नहीं जा सकता।",
+        "endpoint_url_unset": "सेट नहीं",
+        "endpoint_model_label": "एंडपॉइंट मॉडल",
+        "endpoint_model_desc": "मॉडल का नाम, जैसा तुम्हारा सर्वर दिखाता है।",
+        "endpoint_model_listed_desc": "तुम्हारे सर्वर द्वारा दिखाए गए मॉडल।",
+        "endpoint_model_unlisted_desc": "सर्वर की मॉडल सूची नहीं पढ़ी जा सकी ({{error}})। मॉडल का नाम वैसा ही लिखो जैसा तुम्हारा सर्वर दिखाता है।",
+        "endpoint_model_choose": "मॉडल चुनो",
+        "endpoint_model_placeholder": "मॉडल का नाम",
+        "endpoint_timeout_label": "अनुरोध टाइमआउट (सेकंड)",
+        "endpoint_timeout_desc": "एक चंक का अनुरोध कितनी देर चल सकता है, उसके बाद चंक विफल दर्ज होता है (10–1800 सेकंड)।",
+        "harness_unused_hint": "जब तक एक्सट्रैक्शन लोकल एंडपॉइंट पर चलता है, इसका उपयोग नहीं होता।"
       }
     },
     "localStorageDebug": {

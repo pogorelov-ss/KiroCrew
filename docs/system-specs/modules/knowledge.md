@@ -157,6 +157,7 @@ The remaining gap is therefore an **A/B task-lift harness** (Tier 2), plus a flo
 | `dashboard/handlers/knowledge_bundles.py` | `.knowledge` export and import |
 | `dashboard/handlers/knowledge_embeddings.py` | embedding status, the batch embed that fills missing vectors, the background rebuild job |
 | `dashboard/handlers/knowledge_agent_context.py` | the chat context-injection search (`GET /api/knowledge/search-for-context`) and the agent's `POST /api/knowledge/agent-document` |
+| `dashboard/handlers/knowledge_extraction_endpoint.py` | `GET /api/knowledge/extraction-endpoint/models`: the extraction endpoint's model list for the settings tab |
 | `dashboard/handlers/knowledge_lifecycle.py` | `setup_knowledge_routes`, the source watcher, artifact auto-ingest, live config reloads, the pools' shutdown |
 | `agent_materialization/service_agents.py:_install_knowledge_agent` | Installs the `kirocrew-knowledge` kiro-cli agent used by the pool |
 | `agent_materialization/service_agents.py:repair_knowledge_agent_spec` | Rewrites that spec from the same template before each pool worker spawn when the file on disk is not it |
@@ -703,6 +704,25 @@ not in `_EDITABLE_CONFIG`, so neither `PATCH /api/config` nor an agent's change 
 can point chunks at a new host. `extraction_provider`, `extraction_endpoint_model` and
 `extraction_timeout_secs` are editable and classified in `change_card_catalog` as
 unable to widen.
+
+**Settings tab.** The Knowledge page's settings tab (`website/src/pages/knowledge/SettingsTab.tsx`)
+has an "Extraction runs on" select (`extraction_provider`). On the endpoint, three
+rows appear under it: the URL, shown read-only because `config.json` alone sets it;
+the endpoint model; and the request timeout. The harness model and effort rows stay
+in place, disabled, since the endpoint ignores both. The endpoint model is picked
+from the server's own list, which the tab reads through
+`GET /api/knowledge/extraction-endpoint/models`, or typed when that list is
+unavailable. The route answers the owner only (`require_owner_dashboard_request`,
+the gate `PATCH /api/config` uses), so an app token is refused even where its
+manifest covers `/api/knowledge`. It connects only to a `base_url` that
+`base_url_refusal` accepts (the URL half of `endpoint_refusal`, without the model,
+so the list works before a model is chosen), sends `GET {base_url}/models` with no
+document content, follows no redirect, gives up after 5 s and reads at most 1 MiB.
+It returns the first 200 distinct `data[].id` strings in server order, and always
+answers the owner 200 with `models` and `error`, so an unset, refused, unreachable
+or malformed endpoint becomes the typed-name fallback rather than an error page.
+`test_knowledge_extraction_endpoint_models.py` pins the route and
+`KnowledgeSettingsTab.test.tsx` the tab.
 
 ### Failed extraction calls
 

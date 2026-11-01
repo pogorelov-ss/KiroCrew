@@ -14570,7 +14570,23 @@
         "retry": "Retry",
         "extraction_effort_label": "Extraktions-Aufwand",
         "effort_hint": "Standard läuft mit High-Aufwand, bis du einen Level wählst.",
-        "effort_model_unknown_hint": "Das Modell wird zur Laufzeit gewählt, daher gilt der Aufwand nur, wenn das aufgelöste Modell ihn unterstützt. Standard läuft mit High-Aufwand."
+        "effort_model_unknown_hint": "Das Modell wird zur Laufzeit gewählt, daher gilt der Aufwand nur, wenn das aufgelöste Modell ihn unterstützt. Standard läuft mit High-Aufwand.",
+        "provider_label": "Extraktion läuft auf",
+        "provider_desc": "Wo die Entitätsextraktion jedes Abschnitts läuft. Ein lokaler Endpunkt hält Dokumentabschnitte auf diesem Rechner und verbraucht keine Cloud-Tokens.",
+        "provider_harness": "Agent-Harness",
+        "provider_endpoint": "Lokaler Endpunkt",
+        "endpoint_url_label": "Endpunkt-URL",
+        "endpoint_url_desc": "Lege knowledge.extraction_base_url in config.json fest. Sie bestimmt, wohin Dokumentabschnitte gehen, daher wird sie hier angezeigt, kann hier aber nicht geändert werden.",
+        "endpoint_url_unset": "Nicht festgelegt",
+        "endpoint_model_label": "Endpunkt-Modell",
+        "endpoint_model_desc": "Der Modellname, wie dein Server ihn auflistet.",
+        "endpoint_model_listed_desc": "Modelle, die dein Server auflistet.",
+        "endpoint_model_unlisted_desc": "Die Modellliste des Servers konnte nicht gelesen werden ({{error}}). Gib den Modellnamen so ein, wie dein Server ihn auflistet.",
+        "endpoint_model_choose": "Modell wählen",
+        "endpoint_model_placeholder": "Modellname",
+        "endpoint_timeout_label": "Anfrage-Timeout (Sekunden)",
+        "endpoint_timeout_desc": "Wie lange die Anfrage für einen Abschnitt dauern darf, bevor der Abschnitt als fehlgeschlagen erfasst wird (10–1800 Sekunden).",
+        "harness_unused_hint": "Wird nicht verwendet, solange die Extraktion auf einem lokalen Endpunkt läuft."
       }
     },
     "localStorageDebug": {

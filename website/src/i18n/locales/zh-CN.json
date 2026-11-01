@@ -14329,7 +14329,23 @@
         "retry": "Retry",
         "extraction_effort_label": "提取投入",
         "effort_hint": "选择级别之前，默认使用 High effort。",
-        "effort_model_unknown_hint": "模型在运行时才确定，因此只有当解析出的模型支持 effort 时才会应用。默认使用 High effort。"
+        "effort_model_unknown_hint": "模型在运行时才确定，因此只有当解析出的模型支持 effort 时才会应用。默认使用 High effort。",
+        "provider_label": "抽取运行于",
+        "provider_desc": "每个分块的实体抽取在哪里运行。使用本地端点时，文档分块留在本机，不消耗云端 token。",
+        "provider_harness": "代理 harness",
+        "provider_endpoint": "本地端点",
+        "endpoint_url_label": "端点 URL",
+        "endpoint_url_desc": "在 config.json 中设置 knowledge.extraction_base_url。它决定文档分块发往何处，因此此处只显示、不能修改。",
+        "endpoint_url_unset": "未设置",
+        "endpoint_model_label": "端点模型",
+        "endpoint_model_desc": "与服务器列出的名称一致的模型名。",
+        "endpoint_model_listed_desc": "服务器列出的模型。",
+        "endpoint_model_unlisted_desc": "无法读取服务器的模型列表（{{error}}）。请按服务器列出的名称输入模型名。",
+        "endpoint_model_choose": "选择模型",
+        "endpoint_model_placeholder": "模型名称",
+        "endpoint_timeout_label": "请求超时（秒）",
+        "endpoint_timeout_desc": "单个分块的请求在被记为失败前可持续的时间（10–1800 秒）。",
+        "harness_unused_hint": "抽取在本地端点上运行时不使用。"
       }
     },
     "localStorageDebug": {

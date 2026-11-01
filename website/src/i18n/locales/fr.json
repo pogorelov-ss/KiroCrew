@@ -14811,7 +14811,23 @@
         "retry": "Retry",
         "extraction_effort_label": "Effort d'extraction",
         "effort_hint": "Par défaut, l'effort est High jusqu'à ce que tu choisisses un niveau.",
-        "effort_model_unknown_hint": "Le modèle est choisi à l'exécution, donc l'effort ne s'applique que si le modèle résolu le prend en charge. Par défaut, l'effort est High."
+        "effort_model_unknown_hint": "Le modèle est choisi à l'exécution, donc l'effort ne s'applique que si le modèle résolu le prend en charge. Par défaut, l'effort est High.",
+        "provider_label": "L'extraction s'exécute sur",
+        "provider_desc": "Où s'exécute l'extraction d'entités de chaque fragment. Un point de terminaison local garde les fragments de documents sur cette machine et ne consomme aucun jeton cloud.",
+        "provider_harness": "Harness de l'agent",
+        "provider_endpoint": "Point de terminaison local",
+        "endpoint_url_label": "URL du point de terminaison",
+        "endpoint_url_desc": "Définis knowledge.extraction_base_url dans config.json. Elle décide où vont les fragments de documents : elle est donc affichée ici mais ne peut pas être modifiée ici.",
+        "endpoint_url_unset": "Non défini",
+        "endpoint_model_label": "Modèle du point de terminaison",
+        "endpoint_model_desc": "Le nom du modèle tel que ton serveur le liste.",
+        "endpoint_model_listed_desc": "Modèles listés par ton serveur.",
+        "endpoint_model_unlisted_desc": "Impossible de lire la liste des modèles du serveur ({{error}}). Saisis le nom du modèle tel que ton serveur le liste.",
+        "endpoint_model_choose": "Choisis un modèle",
+        "endpoint_model_placeholder": "nom du modèle",
+        "endpoint_timeout_label": "Délai de la requête (secondes)",
+        "endpoint_timeout_desc": "Durée maximale de la requête d'un fragment avant que le fragment soit enregistré comme échoué (10–1800 secondes).",
+        "harness_unused_hint": "Non utilisé tant que l'extraction s'exécute sur un point de terminaison local."
       }
     },
     "localStorageDebug": {

@@ -413,6 +413,11 @@ READ_ROUTES = [
     ("/api/knowledge/embedding/status", kh.get_embedding_status),
     ("/api/knowledge/search-for-context", kh.search_for_context),
 ]
+#: Reads that answer the owner and no one else, an app token included: the route
+#: connects to the extraction endpoint's host, which no app manifest scope covers.
+STRICT_OWNER_READ_ROUTES = [
+    ("/api/knowledge/extraction-endpoint/models", kh.list_extraction_endpoint_models),
+]
 
 
 def _planted(identity: dict):
@@ -457,7 +462,25 @@ def test_read_route_list_covers_every_get_registration():
     app["knowledge_pipeline"] = MagicMock()
     kh.setup_knowledge_routes(app)
     registered = {r.resource.canonical for r in app.router.routes() if r.method == "GET"}
-    assert registered == {path for path, _ in READ_ROUTES}
+    assert registered == {path for path, _ in READ_ROUTES + STRICT_OWNER_READ_ROUTES}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("identity", [NON_OWNER_ID, APP_ID], ids=["non-owner-dashboard", "app"])
+@pytest.mark.parametrize(
+    "path,handler", STRICT_OWNER_READ_ROUTES, ids=[p for p, _ in STRICT_OWNER_READ_ROUTES]
+)
+async def test_a_strict_owner_read_refuses_everyone_but_the_owner(path, handler, identity):
+    app = web.Application(middlewares=[_planted(identity)])
+    state = MagicMock()
+    state.owner_id = OWNER
+    app["state"] = state
+    app.router.add_get(path, handler)
+    async with TestClient(TestServer(app)) as client:
+        resp = await client.get(path)
+        body = await resp.json()
+    assert resp.status == 403
+    assert _owner_only(body)
 
 
 @pytest.mark.asyncio

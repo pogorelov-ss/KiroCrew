@@ -14811,7 +14811,23 @@
         "retry": "Retry",
         "extraction_effort_label": "Esforço de extração",
         "effort_hint": "O padrão usa effort High até você escolher um nível.",
-        "effort_model_unknown_hint": "O modelo é escolhido em tempo de execução, então o effort só se aplica quando o modelo resolvido o suporta. O padrão usa effort High."
+        "effort_model_unknown_hint": "O modelo é escolhido em tempo de execução, então o effort só se aplica quando o modelo resolvido o suporta. O padrão usa effort High.",
+        "provider_label": "A extração é executada em",
+        "provider_desc": "Onde a extração de entidades de cada trecho é executada. Um endpoint local mantém os trechos dos documentos nesta máquina e não gasta tokens na nuvem.",
+        "provider_harness": "Harness do agente",
+        "provider_endpoint": "Endpoint local",
+        "endpoint_url_label": "URL do endpoint",
+        "endpoint_url_desc": "Defina knowledge.extraction_base_url no config.json. Ela decide para onde vão os trechos dos documentos, por isso é mostrada aqui, mas não pode ser alterada aqui.",
+        "endpoint_url_unset": "Não definido",
+        "endpoint_model_label": "Modelo do endpoint",
+        "endpoint_model_desc": "O nome do modelo como seu servidor o lista.",
+        "endpoint_model_listed_desc": "Modelos que seu servidor lista.",
+        "endpoint_model_unlisted_desc": "Não foi possível ler a lista de modelos do servidor ({{error}}). Digite o nome do modelo como seu servidor o lista.",
+        "endpoint_model_choose": "Escolha um modelo",
+        "endpoint_model_placeholder": "nome do modelo",
+        "endpoint_timeout_label": "Tempo limite da solicitação (segundos)",
+        "endpoint_timeout_desc": "Quanto tempo a solicitação de um trecho pode levar antes de o trecho ser registrado como falho (10–1800 segundos).",
+        "harness_unused_hint": "Não é usado enquanto a extração é executada em um endpoint local."
       }
     },
     "localStorageDebug": {

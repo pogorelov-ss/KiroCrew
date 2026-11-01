@@ -14811,7 +14811,23 @@
         "retry": "Retry",
         "extraction_effort_label": "Sforzo di estrazione",
         "effort_hint": "Il valore predefinito usa effort High finché non scegli un livello.",
-        "effort_model_unknown_hint": "Il modello viene scelto a runtime, quindi l'effort si applica solo quando il modello risolto lo supporta. Il valore predefinito usa effort High."
+        "effort_model_unknown_hint": "Il modello viene scelto a runtime, quindi l'effort si applica solo quando il modello risolto lo supporta. Il valore predefinito usa effort High.",
+        "provider_label": "L'estrazione viene eseguita su",
+        "provider_desc": "Dove viene eseguita l'estrazione delle entità di ogni frammento. Un endpoint locale mantiene i frammenti dei documenti su questa macchina e non consuma token cloud.",
+        "provider_harness": "Harness dell'agente",
+        "provider_endpoint": "Endpoint locale",
+        "endpoint_url_label": "URL dell'endpoint",
+        "endpoint_url_desc": "Imposta knowledge.extraction_base_url in config.json. Decide dove vanno i frammenti dei documenti, quindi è mostrato qui ma non può essere modificato qui.",
+        "endpoint_url_unset": "Non impostato",
+        "endpoint_model_label": "Modello dell'endpoint",
+        "endpoint_model_desc": "Il nome del modello come lo elenca il tuo server.",
+        "endpoint_model_listed_desc": "Modelli elencati dal tuo server.",
+        "endpoint_model_unlisted_desc": "Impossibile leggere l'elenco dei modelli del server ({{error}}). Digita il nome del modello come lo elenca il tuo server.",
+        "endpoint_model_choose": "Scegli un modello",
+        "endpoint_model_placeholder": "nome del modello",
+        "endpoint_timeout_label": "Timeout della richiesta (secondi)",
+        "endpoint_timeout_desc": "Quanto può durare la richiesta di un frammento prima che il frammento venga registrato come non riuscito (10–1800 secondi).",
+        "harness_unused_hint": "Non usato mentre l'estrazione viene eseguita su un endpoint locale."
       }
     },
     "localStorageDebug": {

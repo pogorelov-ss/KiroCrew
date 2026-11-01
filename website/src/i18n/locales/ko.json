@@ -14329,7 +14329,23 @@
         "retry": "Retry",
         "extraction_effort_label": "추론 노력(추출)",
         "effort_hint": "기본값은 수준을 선택할 때까지 High effort로 동작합니다.",
-        "effort_model_unknown_hint": "모델은 실행 시점에 선택되므로, effort는 확인된 모델이 지원할 때만 적용됩니다. 기본값은 High effort로 동작합니다."
+        "effort_model_unknown_hint": "모델은 실행 시점에 선택되므로, effort는 확인된 모델이 지원할 때만 적용됩니다. 기본값은 High effort로 동작합니다.",
+        "provider_label": "추출 실행 위치",
+        "provider_desc": "각 청크의 엔터티 추출을 실행하는 위치입니다. 로컬 엔드포인트를 사용하면 문서 청크가 이 컴퓨터를 벗어나지 않고 클라우드 토큰도 쓰지 않습니다.",
+        "provider_harness": "에이전트 하네스",
+        "provider_endpoint": "로컬 엔드포인트",
+        "endpoint_url_label": "엔드포인트 URL",
+        "endpoint_url_desc": "config.json에서 knowledge.extraction_base_url을 설정하세요. 문서 청크가 전송될 곳을 정하므로 여기에 표시되지만 여기서 변경할 수는 없습니다.",
+        "endpoint_url_unset": "설정되지 않음",
+        "endpoint_model_label": "엔드포인트 모델",
+        "endpoint_model_desc": "서버가 표시하는 그대로의 모델 이름입니다.",
+        "endpoint_model_listed_desc": "서버가 표시하는 모델입니다.",
+        "endpoint_model_unlisted_desc": "서버의 모델 목록을 읽지 못했습니다({{error}}). 서버가 표시하는 그대로 모델 이름을 입력하세요.",
+        "endpoint_model_choose": "모델 선택",
+        "endpoint_model_placeholder": "모델 이름",
+        "endpoint_timeout_label": "요청 시간 제한(초)",
+        "endpoint_timeout_desc": "한 청크의 요청이 실패로 기록되기 전까지 걸릴 수 있는 시간입니다(10–1800초).",
+        "harness_unused_hint": "로컬 엔드포인트에서 추출을 실행하는 동안에는 사용되지 않습니다."
       }
     },
     "localStorageDebug": {

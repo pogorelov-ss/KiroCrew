@@ -14329,7 +14329,23 @@
         "retry": "Retry",
         "extraction_effort_label": "抽出の effort",
         "effort_hint": "「デフォルト」はレベルを選ぶまで High の effort で動きます。",
-        "effort_model_unknown_hint": "モデルは実行時に選択されるため、effort は解決されたモデルが対応している場合にのみ適用されます。デフォルトは High の effort で動きます。"
+        "effort_model_unknown_hint": "モデルは実行時に選択されるため、effort は解決されたモデルが対応している場合にのみ適用されます。デフォルトは High の effort で動きます。",
+        "provider_label": "抽出の実行先",
+        "provider_desc": "各チャンクのエンティティ抽出を実行する場所です。ローカルエンドポイントでは、ドキュメントのチャンクはこのマシンから出ず、クラウドのトークンも消費しません。",
+        "provider_harness": "エージェントハーネス",
+        "provider_endpoint": "ローカルエンドポイント",
+        "endpoint_url_label": "エンドポイント URL",
+        "endpoint_url_desc": "config.json で knowledge.extraction_base_url を設定します。ドキュメントのチャンクの送信先を決めるため、ここには表示されますが、ここでは変更できません。",
+        "endpoint_url_unset": "未設定",
+        "endpoint_model_label": "エンドポイントのモデル",
+        "endpoint_model_desc": "サーバーが一覧表示するとおりのモデル名です。",
+        "endpoint_model_listed_desc": "サーバーが一覧表示するモデルです。",
+        "endpoint_model_unlisted_desc": "サーバーのモデル一覧を読み取れませんでした ({{error}})。サーバーが一覧表示するとおりにモデル名を入力してください。",
+        "endpoint_model_choose": "モデルを選択",
+        "endpoint_model_placeholder": "モデル名",
+        "endpoint_timeout_label": "リクエストのタイムアウト (秒)",
+        "endpoint_timeout_desc": "1 つのチャンクのリクエストが失敗として記録されるまでの時間です (10–1800 秒)。",
+        "harness_unused_hint": "ローカルエンドポイントで抽出を実行している間は使用されません。"
       }
     },
     "localStorageDebug": {

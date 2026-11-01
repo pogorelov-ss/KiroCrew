@@ -14811,7 +14811,23 @@
         "retry": "Retry",
         "extraction_effort_label": "Esfuerzo de extracción",
         "effort_hint": "Por defecto se usa effort High hasta que elijas un nivel.",
-        "effort_model_unknown_hint": "El modelo se elige en tiempo de ejecución, así que el effort solo se aplica cuando el modelo resuelto lo admite. Por defecto se usa effort High."
+        "effort_model_unknown_hint": "El modelo se elige en tiempo de ejecución, así que el effort solo se aplica cuando el modelo resuelto lo admite. Por defecto se usa effort High.",
+        "provider_label": "La extracción se ejecuta en",
+        "provider_desc": "Dónde se ejecuta la extracción de entidades de cada fragmento. Un endpoint local mantiene los fragmentos de documentos en este equipo y no gasta tokens en la nube.",
+        "provider_harness": "Harness del agente",
+        "provider_endpoint": "Endpoint local",
+        "endpoint_url_label": "URL del endpoint",
+        "endpoint_url_desc": "Define knowledge.extraction_base_url en config.json. Decide adónde van los fragmentos de documentos, por eso se muestra aquí pero no se puede cambiar aquí.",
+        "endpoint_url_unset": "Sin definir",
+        "endpoint_model_label": "Modelo del endpoint",
+        "endpoint_model_desc": "El nombre del modelo tal como lo lista tu servidor.",
+        "endpoint_model_listed_desc": "Modelos que lista tu servidor.",
+        "endpoint_model_unlisted_desc": "No se pudo leer la lista de modelos del servidor ({{error}}). Escribe el nombre del modelo tal como lo lista tu servidor.",
+        "endpoint_model_choose": "Elige un modelo",
+        "endpoint_model_placeholder": "nombre del modelo",
+        "endpoint_timeout_label": "Tiempo de espera de la solicitud (segundos)",
+        "endpoint_timeout_desc": "Cuánto puede tardar la solicitud de un fragmento antes de que el fragmento se registre como fallido (10–1800 segundos).",
+        "harness_unused_hint": "No se usa mientras la extracción se ejecuta en un endpoint local."
       }
     },
     "localStorageDebug": {

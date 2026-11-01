@@ -21,6 +21,7 @@ from kiro_crew import _facade_mirror
 #   ``knowledge_bundles`` -- ``.knowledge`` export and import
 #   ``knowledge_embeddings`` -- embedding status, rebuild and batch embed
 #   ``knowledge_agent_context`` -- the chat context search and the agent's document add
+#   ``knowledge_extraction_endpoint`` -- the extraction endpoint's model list
 #   ``knowledge_lifecycle`` -- the route table, watchers, config reloads and shutdown
 #: Owner modules, lowest layer first: the first holder of a name answers its reads.
 _OWNERS = (
@@ -32,6 +33,7 @@ _OWNERS = (
     "kiro_crew.dashboard.handlers.knowledge_bundles",
     "kiro_crew.dashboard.handlers.knowledge_embeddings",
     "kiro_crew.dashboard.handlers.knowledge_agent_context",
+    "kiro_crew.dashboard.handlers.knowledge_extraction_endpoint",
     "kiro_crew.dashboard.handlers.knowledge_lifecycle",
 )
 for _owner in _OWNERS:
@@ -80,6 +82,15 @@ if TYPE_CHECKING:  # every owner-defined name in _EXPORTS, for type checkers and
     from kiro_crew.dashboard.handlers.knowledge_embeddings import (  # noqa: F401
         _finalize_job_audited,
         _rebuild_embeddings_job,
+    )
+    from kiro_crew.dashboard.handlers.knowledge_extraction_endpoint import (  # noqa: F401
+        MODEL_ID_MAX_LEN,
+        MODEL_LIST_MAX_BYTES,
+        MODEL_LIST_MAX_MODELS,
+        MODEL_LIST_TIMEOUT_SECS,
+        _fetch_model_ids,
+        _model_ids,
+        list_extraction_endpoint_models,
     )
     from kiro_crew.dashboard.handlers.knowledge_ingest import _inspect_zip_archive  # noqa: F401
     from kiro_crew.dashboard.handlers.knowledge_ingest import get_job  # noqa: F401
@@ -218,6 +229,8 @@ if TYPE_CHECKING:  # names it serves from outside the family, from their homes
     from kiro_crew.knowledge.embedder import create_embedder_from_config  # noqa: F401
     from kiro_crew.knowledge.embedder import embedder_signature  # noqa: F401
     from kiro_crew.knowledge.embedder import floats_to_bytes  # noqa: F401
+    from kiro_crew.knowledge.extraction_endpoint import _get_extraction_endpoint  # noqa: F401
+    from kiro_crew.knowledge.extraction_endpoint import base_url_refusal  # noqa: F401
     from kiro_crew.knowledge.extractor import EntityExtractor  # noqa: F401
     from kiro_crew.knowledge.folder_watcher import estimate_scan_cost  # noqa: F401
     from kiro_crew.knowledge.folder_watcher import folder_chunk_budget  # noqa: F401
@@ -231,6 +244,7 @@ if TYPE_CHECKING:  # names it serves from outside the family, from their homes
     from kiro_crew.knowledge.ingestion import start_rebuild_job  # noqa: F401
     from kiro_crew.knowledge.llm_pool import DEFAULT_EXTRACTION_EFFORT  # noqa: F401
     from kiro_crew.knowledge.llm_pool import LLMPool  # noqa: F401
+    from kiro_crew.knowledge.llm_pool import _read_config  # noqa: F401
     from kiro_crew.knowledge.readers import FileReader  # noqa: F401
     from kiro_crew.knowledge.retrieval import HybridRetriever  # noqa: F401
     from kiro_crew.knowledge.retrieval import vector_leg  # noqa: F401
