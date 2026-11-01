@@ -28,6 +28,9 @@ from kiro_crew.dashboard.handlers.knowledge_embeddings import (
     batch_embed_items,
     get_embedding_status,
 )
+from kiro_crew.dashboard.handlers.knowledge_extraction_endpoint import (
+    list_extraction_endpoint_models,
+)
 from kiro_crew.dashboard.handlers.knowledge_ingest import get_job, ingest_file, ingest_text
 from kiro_crew.dashboard.handlers.knowledge_library import (
     delete_item,
@@ -412,6 +415,7 @@ def setup_knowledge_routes(app: web.Application) -> None:
     app.router.add_post("/api/knowledge/embedding/generate", batch_embed_items)
     app.router.add_get("/api/knowledge/search-for-context", search_for_context)
     app.router.add_post("/api/knowledge/remote-search", remote_search)
+    app.router.add_get("/api/knowledge/extraction-endpoint/models", list_extraction_endpoint_models)
 
     # Pool lifecycle: lazy start on first request, shutdown on app exit
     app.on_cleanup.append(_shutdown_knowledge_pools)
