@@ -114,10 +114,19 @@ def endpoint_refusal(endpoint: ExtractionEndpoint) -> Optional[str]:
     resolves to loopback is not trusted as loopback: only ``localhost`` and IP
     literals are, because anything else is a DNS answer someone else controls.
     """
+    if endpoint.base_url and not endpoint.model:
+        return "knowledge.extraction_endpoint_model is not set"
+    return base_url_refusal(endpoint)
+
+
+def base_url_refusal(endpoint: ExtractionEndpoint) -> Optional[str]:
+    """Why the gateway may not connect to *endpoint*'s ``base_url`` at all, or ``None``.
+
+    The URL half of :func:`endpoint_refusal`, without the model: the dashboard's model
+    list asks the same host before a model is chosen.
+    """
     if not endpoint.base_url:
         return "knowledge.extraction_base_url is not set"
-    if not endpoint.model:
-        return "knowledge.extraction_endpoint_model is not set"
     parts = urlsplit(endpoint.base_url)
     if parts.scheme not in ("http", "https") or not parts.hostname:
         return f"knowledge.extraction_base_url {endpoint.base_url!r} is not an http(s) URL"
