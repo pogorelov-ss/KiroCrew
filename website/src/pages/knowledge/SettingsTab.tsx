@@ -1,12 +1,15 @@
 import { useState, useId, createContext, useContext } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../../api/client'
 import { useAvailableModels } from '../../hooks/useAvailableModels'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
 import { EFFORT_LEVELS, effortLabel, modelSupportsEffort } from '../../lib/effort'
 import SimpleSelect from '../../components/SimpleSelect'
 import { SchemaRestartBadge } from '../../components/settingRef/RestartRequiredBadge'
 import { i18nT } from '../../i18n/t'
 import ErrorNotice from '../../components/ErrorNotice'
+import { knowledgeApi } from './api'
 
 // ── Constants matching backend _EDITABLE_CONFIG bounds ──
 const EMBED_RATE_MIN = 0
@@ -20,11 +23,37 @@ const POOL_SIZE_MIN = 1
 const POOL_SIZE_MAX = 10
 const POOL_SIZE_DEFAULT = 3
 
+// knowledge.extraction_provider values (config/memory_sections.py
+// EXTRACTION_PROVIDERS). Anything else reads as the harness, as on the backend.
+const PROVIDER_HARNESS = 'acp'
+const PROVIDER_ENDPOINT = 'openai_compat'
+const PROVIDERS = [PROVIDER_HARNESS, PROVIDER_ENDPOINT]
+
+// Mirrors EXTRACTION_TIMEOUT_SECS_MIN/MAX (config/sections_limits.py) and
+// EXTRACTION_TIMEOUT_SECS_DEFAULT (config/memory_sections.py).
+const TIMEOUT_MIN = 10
+const TIMEOUT_MAX = 1800
+const TIMEOUT_DEFAULT = 180
+// The knowledge.extraction_endpoint_model write schema's max_len.
+const ENDPOINT_MODEL_MAX_LEN = 256
+
+interface EndpointModels {
+  base_url: string
+  models: string[]
+  error: string | null
+}
+
 /**
  * Knowledge Library settings tab — ingestion cost & performance controls.
  *
- * Fields: embedding rate limit, extraction model, extraction effort,
- * extraction pool size. The effort select is disabled — with the same
+ * Fields: embedding rate limit, where extraction runs, extraction model,
+ * extraction effort, extraction pool size. With extraction on a local
+ * OpenAI-compatible endpoint, three endpoint rows appear under the provider
+ * select: the URL (read-only: config.json alone decides where document chunks
+ * may go), the endpoint model (picked from the server's own /models list,
+ * typed when that list is unavailable) and the request timeout. The harness
+ * model and effort rows then stay in place, disabled, since the endpoint
+ * ignores both. The effort select is disabled — with the same
  * `effort_needs_reasoning_model` hint the Chat role rows use — when the model
  * the pool will serve (the extraction model, falling back to the agent
  * default) is KNOWN and cannot take effort, because the backend then ignores
@@ -50,6 +79,10 @@ export function SettingsTab() {
       extraction_model?: string
       extraction_effort?: string
       extraction_pool_size?: number
+      extraction_provider?: string
+      extraction_base_url?: string
+      extraction_endpoint_model?: string
+      extraction_timeout_secs?: number
     }
   }>({
     queryKey: ['kirocrewConfig'],
@@ -67,6 +100,8 @@ export function SettingsTab() {
       // Revert all local inputs to last-known server values
       setLocalEmbedRate(String(cfg?.embed_rate_limit ?? EMBED_RATE_DEFAULT))
       setLocalPoolSize(String(cfg?.extraction_pool_size ?? POOL_SIZE_DEFAULT))
+      setLocalTimeout(String(cfg?.extraction_timeout_secs ?? TIMEOUT_DEFAULT))
+      setLocalEndpointModel(cfg?.extraction_endpoint_model ?? '')
     },
   })
   const disabled = !cfgQ.isSuccess || patchMut.isPending
@@ -74,6 +109,8 @@ export function SettingsTab() {
   // ── Local state for number inputs (commit on blur) ──
   const [localEmbedRate, setLocalEmbedRate] = useState('')
   const [localPoolSize, setLocalPoolSize] = useState('')
+  const [localTimeout, setLocalTimeout] = useState('')
+  const [localEndpointModel, setLocalEndpointModel] = useState('')
 
   // The served config seeds both rows ONCE, in the render that first has it.
   // Setting state during render is React's shape for state derived from a value
@@ -86,6 +123,8 @@ export function SettingsTab() {
     setSeeded(true)
     setLocalEmbedRate(String(cfg?.embed_rate_limit ?? EMBED_RATE_DEFAULT))
     setLocalPoolSize(String(cfg?.extraction_pool_size ?? POOL_SIZE_DEFAULT))
+    setLocalTimeout(String(cfg?.extraction_timeout_secs ?? TIMEOUT_DEFAULT))
+    setLocalEndpointModel(cfg?.extraction_endpoint_model ?? '')
   }
 
   // ── Commit helpers ──
@@ -109,6 +148,46 @@ export function SettingsTab() {
     }
     patchMut.mutate({ path, value: n })
   }
+
+  function commitEndpointModel(raw: string) {
+    const trimmed = raw.trim()
+    const stored = cfg?.extraction_endpoint_model ?? ''
+    if (trimmed.length > ENDPOINT_MODEL_MAX_LEN || trimmed === stored) {
+      setLocalEndpointModel(stored)
+      return
+    }
+    patchMut.mutate({ path: 'knowledge.extraction_endpoint_model', value: trimmed })
+  }
+
+  // ── Where extraction runs ──
+  const provider = cfg?.extraction_provider === PROVIDER_ENDPOINT ? PROVIDER_ENDPOINT : PROVIDER_HARNESS
+  const onEndpoint = provider === PROVIDER_ENDPOINT
+  const providerLabels = [
+    i18nT('pages.knowledge.settings.provider_harness'),
+    i18nT('pages.knowledge.settings.provider_endpoint'),
+  ]
+  const reducedMotion = useReducedMotion()
+  // The server's own list, asked through the gateway (which applies the same
+  // loopback guard as extraction). Keyed by the URL so a config.json edit to
+  // it asks again.
+  const endpointModelsQ = useQuery<EndpointModels>({
+    queryKey: ['knowledge-extraction-endpoint-models', cfg?.extraction_base_url ?? ''],
+    queryFn: () => knowledgeApi<EndpointModels>('/extraction-endpoint/models'),
+    enabled: onEndpoint,
+  })
+  // The select only when the server listed something: with no list a stored
+  // name alone would leave nothing to pick, so the row takes a typed name.
+  const listedModels = endpointModelsQ.data?.models ?? []
+  const endpointModel = cfg?.extraction_endpoint_model ?? ''
+  const endpointModelOptions = endpointModel && !listedModels.includes(endpointModel)
+    ? [endpointModel, ...listedModels]
+    : listedModels
+  const endpointModelsError = endpointModelsQ.data?.error ?? endpointModelsQ.error?.message ?? ''
+  const endpointModelDesc = listedModels.length > 0
+    ? i18nT('pages.knowledge.settings.endpoint_model_listed_desc')
+    : endpointModelsError
+      ? i18nT('pages.knowledge.settings.endpoint_model_unlisted_desc', { error: endpointModelsError })
+      : i18nT('pages.knowledge.settings.endpoint_model_desc')
 
   // ── Model dropdown ──
   const availableModels = useAvailableModels()
@@ -200,10 +279,98 @@ export function SettingsTab() {
         </div>
       </SettingRow>
 
+      {/* Where extraction runs */}
+      <SettingRow
+        label={i18nT('pages.knowledge.settings.provider_label')}
+        description={i18nT('pages.knowledge.settings.provider_desc')}
+      >
+        <SimpleSelect
+          options={PROVIDERS}
+          optionLabels={providerLabels}
+          value={provider}
+          triggerFallback={providerLabels[PROVIDERS.indexOf(provider)]}
+          onChange={v => patchMut.mutate({ path: 'knowledge.extraction_provider', value: v })}
+          aria-label={i18nT('pages.knowledge.settings.provider_label')}
+          disabled={disabled}
+        />
+      </SettingRow>
+
+      <AnimatePresence initial={false}>
+        {onEndpoint && (
+          <motion.div
+            key="extraction-endpoint"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: reducedMotion ? 0 : 0.2 }}
+            className="overflow-hidden"
+          >
+            {/* Endpoint URL: shown, never edited here */}
+            <SettingRow
+              label={i18nT('pages.knowledge.settings.endpoint_url_label')}
+              description={i18nT('pages.knowledge.settings.endpoint_url_desc')}
+            >
+              <code className="block max-w-[220px] truncate text-[12px] text-text" title={cfg?.extraction_base_url || undefined}>
+                {cfg?.extraction_base_url || i18nT('pages.knowledge.settings.endpoint_url_unset')}
+              </code>
+            </SettingRow>
+
+            {/* Endpoint model */}
+            <SettingRow
+              label={i18nT('pages.knowledge.settings.endpoint_model_label')}
+              description={endpointModelDesc}
+            >
+              {listedModels.length > 0 ? (
+                <SimpleSelect
+                  options={endpointModelOptions}
+                  value={endpointModel}
+                  onChange={v => patchMut.mutate({ path: 'knowledge.extraction_endpoint_model', value: v })}
+                  aria-label={i18nT('pages.knowledge.settings.endpoint_model_label')}
+                  triggerFallback={i18nT('pages.knowledge.settings.endpoint_model_choose')}
+                  disabled={disabled}
+                />
+              ) : (
+                <TextInput
+                  value={localEndpointModel}
+                  onChange={setLocalEndpointModel}
+                  onBlur={() => commitEndpointModel(localEndpointModel)}
+                  maxLength={ENDPOINT_MODEL_MAX_LEN}
+                  placeholder={i18nT('pages.knowledge.settings.endpoint_model_placeholder')}
+                  disabled={disabled || endpointModelsQ.isFetching}
+                />
+              )}
+            </SettingRow>
+
+            {/* Endpoint request timeout */}
+            <SettingRow
+              label={i18nT('pages.knowledge.settings.endpoint_timeout_label')}
+              description={i18nT('pages.knowledge.settings.endpoint_timeout_desc')}
+            >
+              <NumberInput
+                value={localTimeout}
+                onChange={setLocalTimeout}
+                onBlur={() => commitNumber(
+                  localTimeout, 'knowledge.extraction_timeout_secs',
+                  TIMEOUT_MIN, TIMEOUT_MAX,
+                  cfg?.extraction_timeout_secs ?? TIMEOUT_DEFAULT,
+                  setLocalTimeout,
+                )}
+                min={TIMEOUT_MIN}
+                max={TIMEOUT_MAX}
+                step={10}
+                disabled={disabled}
+              />
+            </SettingRow>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Extraction model */}
       <SettingRow
         label={i18nT('pages.knowledge.settings.model_label')}
-        description={i18nT('pages.knowledge.settings.model_desc')}
+        description={onEndpoint
+          ? i18nT('pages.knowledge.settings.harness_unused_hint')
+          : i18nT('pages.knowledge.settings.model_desc')}
       >
         <SimpleSelect
           options={modelOptions}
@@ -214,14 +381,14 @@ export function SettingsTab() {
             value: v === 'auto' ? '' : v,
           })}
           aria-label={i18nT('pages.knowledge.settings.model_label')}
-          disabled={disabled}
+          disabled={disabled || onEndpoint}
         />
       </SettingRow>
 
       {/* Extraction effort */}
       <SettingRow
         label={i18nT('pages.knowledge.settings.extraction_effort_label')}
-        description={effortRowHint}
+        description={onEndpoint ? i18nT('pages.knowledge.settings.harness_unused_hint') : effortRowHint}
       >
         {/* Same restart badge as the pool-size row: the pools read the config
             once at startup, so a new effort value applies to workers spawned
@@ -234,7 +401,7 @@ export function SettingsTab() {
             onChange={v => patchMut.mutate({ path: 'knowledge.extraction_effort', value: v })}
             aria-label={i18nT('pages.knowledge.settings.extraction_effort_label')}
             triggerFallback={effortChoiceLabels()[effortOptions.indexOf(cfg?.extraction_effort ?? '')]}
-            disabled={effortDisabled}
+            disabled={effortDisabled || onEndpoint}
           />
           <SchemaRestartBadge configKey="knowledge.extraction_effort" />
         </div>
@@ -321,6 +488,31 @@ function NumberInput({ value, onChange, onBlur, min, max, step, disabled }: {
       min={min}
       max={max}
       step={step}
+      disabled={disabled}
+    />
+  )
+}
+
+function TextInput({ value, onChange, onBlur, maxLength, placeholder, disabled }: {
+  value: string
+  onChange: (v: string) => void
+  onBlur: () => void
+  maxLength: number
+  placeholder: string
+  disabled: boolean
+}) {
+  const labelId = useContext(RowLabelIdContext)
+  return (
+    <input
+      type="text"
+      aria-labelledby={labelId}
+      className="w-[180px] px-2 py-1 text-[12px] border border-border rounded-md bg-bg text-text"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      onBlur={onBlur}
+      maxLength={maxLength}
+      placeholder={placeholder}
+      spellCheck={false}
       disabled={disabled}
     />
   )
