@@ -1306,6 +1306,7 @@ make this tool possible:
 <a href="https://github.com/tmack8001" title="Trevor Mack"><img src="https://github.com/tmack8001.png?size=64" width="64" height="64" alt="Trevor Mack" /></a>
 <a href="https://github.com/toby-wong" title="Toby Wong"><img src="https://github.com/toby-wong.png?size=64" width="64" height="64" alt="Toby Wong" /></a>
 <a href="https://github.com/TomHermanAmazon" title="TomHermanAmazon"><img src="https://github.com/TomHermanAmazon.png?size=64" width="64" height="64" alt="TomHermanAmazon" /></a>
+<a href="https://github.com/tran-simon" title="Simon Tran"><img src="https://github.com/tran-simon.png?size=64" width="64" height="64" alt="Simon Tran" /></a>
 <a href="https://github.com/trekie86" title="Rob Wolinski"><img src="https://github.com/trekie86.png?size=64" width="64" height="64" alt="Rob Wolinski" /></a>
 <a href="https://github.com/trinayhari" title="Trinayaan Hariharan"><img src="https://github.com/trinayhari.png?size=64" width="64" height="64" alt="Trinayaan Hariharan" /></a>
 <a href="https://github.com/tssalvador" title="Tiago &quot;Salvador&quot; Souza"><img src="https://github.com/tssalvador.png?size=64" width="64" height="64" alt="Tiago &quot;Salvador&quot; Souza" /></a>
