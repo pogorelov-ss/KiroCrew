@@ -96,6 +96,12 @@ machine instead:
 }
 ```
 
+Only `extraction_base_url` has to be written by hand. On the Knowledge page's
+**Settings** tab, set **Extraction runs on** to **Local endpoint**: the tab then
+shows the URL and lets you pick the endpoint model from the list your server
+serves (or type the name if the server cannot be reached) and set the request
+timeout.
+
 Any server with an OpenAI-compatible `/chat/completions` route works, for
 example Lemonade or llama.cpp's `llama-server`. Each chunk is one independent
 request with thinking turned off and the reply held to a capped JSON schema, so
