@@ -8,6 +8,7 @@
  * normalized differently from the reading the pill polls thirty seconds later.
  */
 import type { KiroCreditUsage, KiroUsagePayload } from './client'
+import { apiErrorCode } from './apiError'
 
 const MAX_KIRO_BONUS_GRANT_NAME_CHARS = 100
 const MAX_KIRO_BONUS_CREDITS = 1_000_000
@@ -167,4 +168,28 @@ export function kiroUsageRefetchInterval(
   if (settledReads >= KIRO_USAGE_WARMING_MAX_READS) return KIRO_USAGE_STEADY_POLL_MS
   if (isError || state === null) return KIRO_USAGE_WARMING_POLL_MS
   return KIRO_USAGE_STEADY_POLL_MS
+}
+
+/** The code of the 503 the gateway answers a usage read with while kiro-cli is not signed in. */
+export const KIRO_SIGN_IN_REQUIRED_CODE = 'kiro_prerequisite_required'
+
+/**
+ * True when the credit pill should stop polling: the config has LOADED and names
+ * a harness that does not run on the Kiro account, and the gateway refused the
+ * last read because kiro-cli is not signed in.
+ *
+ * On such an install that refusal is the standing state, not a boot condition:
+ * nothing there signs kiro-cli in, so every further poll repeats the same 503
+ * and the pill stays hidden anyway (`usageSegmentHidden`). Polling on would cost
+ * every open pane of such an instance twelve warming reads and then one read
+ * every 30s, each a 503 in the console, for as long as the tab stays open.
+ *
+ * Everything else keeps polling. On a Kiro harness, signing in is the pending
+ * user step, and the next read must see it. A timed-out probe
+ * (`kiro_probe_timed_out`) is transient. An unloaded config is not a verdict.
+ * A non-Kiro harness that DOES read a balance (kiro-cli signed in next to
+ * another harness) never gets this refusal, so it keeps its reading.
+ */
+export function kiroUsagePollStopped(error: unknown, configLoaded: boolean, kiroHarness: boolean): boolean {
+  return configLoaded && !kiroHarness && apiErrorCode(error) === KIRO_SIGN_IN_REQUIRED_CODE
 }
