@@ -7,6 +7,7 @@ import { Provider } from 'react-redux'
 import { createTestStore } from './helpers'
 import { KIRO_USAGE_STEADY_POLL_MS, KIRO_USAGE_WARMING_POLL_MS } from '../api/kiroUsage'
 import { useKiroUsageReadout } from '../shell/topbar/kiroUsageReadout'
+import { ApiError } from '../api/apiError'
 
 /**
  * The credit pill's query must poll at `kiroUsageRefetchInterval`'s cadence.
@@ -31,6 +32,11 @@ vi.mock('../api/client', () => ({
 }))
 
 const KIRO_USAGE_KEY = ['kiro-usage']
+
+/** The gateway's 503 refusal of a usage read, as `j` rejects with it. */
+function refusal(code: string): ApiError {
+  return new ApiError(503, 'refused', JSON.stringify({ error: 'refused', code }))
+}
 
 function mount() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -80,6 +86,41 @@ describe('the credit pill polls at the warming cadence', () => {
     const { queryClient, result } = mount()
 
     await waitFor(() => expect(result.current.kiroUsageState).toBe('failed'))
+
+    expect(resolvedInterval(queryClient)).toBe(KIRO_USAGE_WARMING_POLL_MS)
+  })
+
+  it('stops polling a sign-in refusal on a harness with no Kiro account', async () => {
+    const { api } = await import('../api/client')
+    vi.mocked(api).kirocrewConfig.mockResolvedValue({ agent: { acp_backend: 'claude' } } as never)
+    vi.mocked(api).sessionsUsage.mockRejectedValue(refusal('kiro_prerequisite_required'))
+    const { queryClient, result } = mount()
+
+    await waitFor(() => expect(result.current.kiroUsageState).toBe('failed'))
+    await waitFor(() => expect(result.current.usageSegmentHidden).toBe(true))
+
+    expect(resolvedInterval(queryClient)).toBe(false)
+  })
+
+  it('keeps polling a sign-in refusal on a Kiro harness', async () => {
+    const { api } = await import('../api/client')
+    vi.mocked(api).kirocrewConfig.mockResolvedValue({ agent: { acp_backend: 'kiro' } } as never)
+    vi.mocked(api).sessionsUsage.mockRejectedValue(refusal('kiro_prerequisite_required'))
+    const { queryClient, result } = mount()
+
+    await waitFor(() => expect(result.current.kiroUsageState).toBe('failed'))
+    await waitFor(() => expect(result.current.kiroAccountEntry).toBe(true))
+
+    expect(resolvedInterval(queryClient)).toBe(KIRO_USAGE_WARMING_POLL_MS)
+  })
+
+  it('keeps polling a timed-out probe on a harness with no Kiro account', async () => {
+    const { api } = await import('../api/client')
+    vi.mocked(api).kirocrewConfig.mockResolvedValue({ agent: { acp_backend: 'claude' } } as never)
+    vi.mocked(api).sessionsUsage.mockRejectedValue(refusal('kiro_probe_timed_out'))
+    const { queryClient, result } = mount()
+
+    await waitFor(() => expect(result.current.usageSegmentHidden).toBe(true))
 
     expect(resolvedInterval(queryClient)).toBe(KIRO_USAGE_WARMING_POLL_MS)
   })

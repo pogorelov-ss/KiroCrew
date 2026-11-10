@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { parseKiroUsagePayload, kiroUsageRefetchInterval, type KiroUsageState } from '../api/kiroUsage'
+import { parseKiroUsagePayload, kiroUsagePollStopped, kiroUsageRefetchInterval, type KiroUsageState } from '../api/kiroUsage'
 import { isKiroHarness, type AcpBackendConfig } from '../api/acpBackend'
 import type { KiroAccountUsage } from '../components/KiroAccountModal'
 import { failedWithNoData } from '../api/queryState'
@@ -25,6 +25,14 @@ export function useKiroAccountReading() {
   // backend cache has not warmed yet" (null) apart from "the request failed"
   // (undefined) — both are falsy. Without it a failing endpoint renders as a
   // spinner that never resolves, since the 30s refetch keeps retrying forever.
+  // Read before the usage query: whether this harness runs on the Kiro account
+  // decides whether a sign-in refusal is worth polling again.
+  const kirocrewCfgQuery = useQuery<AcpBackendConfig>({
+    queryKey: ['kirocrewConfig'],
+    queryFn: () => api.kirocrewConfig(),
+  })
+  const { data: kirocrewCfg, isSuccess: kirocrewCfgLoaded } = kirocrewCfgQuery
+  const kiroCreditSurface = isKiroHarness(kirocrewCfg)
   const queryClient = useQueryClient()
   const { data: kiroUsage, isError: kiroUsageFailed } = useQuery<KiroUsageState>({
     queryKey: ['kiro-usage'],
@@ -42,13 +50,16 @@ export function useKiroAccountReading() {
     // query surfaces as an error. Poll fast while the state is unsettled so the
     // pill fills in a couple of seconds instead of waiting a full interval for
     // each of those reads; drop to the steady cadence once a reading (or a
-    // terminal state) lands.
+    // terminal state) lands. On a harness with no Kiro account, a sign-in
+    // refusal is final, so the poll stops (`kiroUsagePollStopped`).
     refetchInterval: (query) =>
-      kiroUsageRefetchInterval(
-        query.state.data ?? null,
-        query.state.status === 'error',
-        query.state.dataUpdateCount + query.state.errorUpdateCount,
-      ),
+      kiroUsagePollStopped(query.state.error, kirocrewCfgLoaded, kiroCreditSurface)
+        ? false
+        : kiroUsageRefetchInterval(
+            query.state.data ?? null,
+            query.state.status === 'error',
+            query.state.dataUpdateCount + query.state.errorUpdateCount,
+          ),
   })
   // ONE derivation feeds both the capsule segment and the account modal, so the
   // drill-in can never report a different state from the pill that opened it —
@@ -59,13 +70,8 @@ export function useKiroAccountReading() {
   // balance behind it. On any other harness the same `available: false` means
   // no Kiro account runs agents here, so there is no balance to read and the
   // segment stays hidden. Read POSITIVELY off the selected backend, never as
-  // "not claude": an unloaded config renders no dash.
-  const kirocrewCfgQuery = useQuery<AcpBackendConfig>({
-    queryKey: ['kirocrewConfig'],
-    queryFn: () => api.kirocrewConfig(),
-  })
-  const { data: kirocrewCfg, isSuccess: kirocrewCfgLoaded } = kirocrewCfgQuery
-  const kiroCreditSurface = isKiroHarness(kirocrewCfg)
+  // "not claude": an unloaded config renders no dash. (`kiroCreditSurface` is
+  // read above, next to the config query.)
   // "The config read failed" must survive its own retry: a data-less errored
   // query goes back to `pending` (error cleared) for the whole refetch, and
   // reading `isError` alone would drop the segment to the hidden non-Kiro shape
