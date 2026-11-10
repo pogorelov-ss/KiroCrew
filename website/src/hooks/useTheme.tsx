@@ -15,7 +15,7 @@ import { isLookPreviewFrame } from '../utils/lookPreview'
 // not depend on exports those mocks never define.
 import { ApiError } from '../api/apiError'
 import { pendingRefresh } from '../api/refreshOnce'
-import { retryDelayPolicy, retryPolicy } from '../api/queryClient'
+import { refetchWhileFailed, retryDelayPolicy, retryPolicy } from '../api/queryClient'
 import { reportSeamCollision } from '../apps/seamCollision'
 import { safeSetItem } from '../utils/safeStorage'
 import {
@@ -597,6 +597,9 @@ export interface ThemeContextValue {
    */
   privacyAckVersion: number | null
   themeBootReady: boolean
+  /** Boot settled with no server answer yet (e.g. mid-restart): the first-run
+   *  flags are only this browser's cache, so the first-run chapters wait. */
+  themeBootFailed: boolean
   markOnboarded: () => void
   markImportOnboarded: () => void
   /** Persists the ack (and the notice version unless told not to); rejects, marking nothing, when the write fails. */
@@ -1141,6 +1144,8 @@ function useThemeState(): ThemeContextValue {
     queryFn: () => api.themeBoot(),
     staleTime: Infinity,  // only need it once on mount
     retry: false,         // if server unavailable, fall back to localStorage silently
+    // ...but keep asking: the fallback is a cache, not the server's answer.
+    refetchInterval: refetchWhileFailed,
   })
   // A read that failed has nothing to apply, so the boot is done the moment it
   // settles. Set the flag while rendering (React re-runs this component before it
@@ -1647,6 +1652,7 @@ function useThemeState(): ThemeContextValue {
     privacyAcked,
     privacyAckVersion,
     themeBootReady,
+    themeBootFailed: themeBootReady && bootApplied === null,
     markOnboarded,
     markImportOnboarded,
     markPrivacyAcked,

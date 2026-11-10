@@ -402,11 +402,17 @@ export function useAppShell() {
     privacyAcked,
     privacyAckVersion,
     themeBootReady,
+    themeBootFailed,
     markOnboarded,
     markImportOnboarded,
     markPrivacyAcked,
   } = useTheme()
-  const firstRun = useFirstRunChapters({ onboarded, importOnboarded, privacyAcked, privacyAckVersion, themeBootReady, markOnboarded })
+  // The chapters decide what is done from the SERVER's flags, so a boot that
+  // settled without them (`themeBootFailed`) is not ready for them yet.
+  const firstRun = useFirstRunChapters({
+    onboarded, importOnboarded, privacyAcked, privacyAckVersion,
+    themeBootReady: themeBootReady && !themeBootFailed, markOnboarded,
+  })
   // Decided once per document: the URL does not change under a mounted App.
   const lookPreviewFrame = isLookPreviewFrame()
   // Capture Electron update lifecycle events app-wide so UpdateModal fires on
